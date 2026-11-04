@@ -90,8 +90,12 @@ button { cursor: pointer; transition: all 0.2s ease; }
   background: linear-gradient(135deg, var(--blue), var(--emerald));
   color: #fff; display: grid; place-items: center; font-weight: 800;
   box-shadow: 0 0 12px rgba(37, 99, 235, 0.4);
-  object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.8);
+  object-fit: cover; border: 2px solid rgba(255, 255, 255, 0.8); overflow: hidden;
 }
+.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.app-footer { margin-top: auto; padding: 18px 24px; text-align: center; font-size: 11px; letter-spacing: .2px; color: var(--slate-500); border-top: 1px solid rgba(148,163,184,.22); }
+.profile-photo-preview { width: 88px; height: 88px; border-radius: 50%; object-fit: cover; border: 3px solid #dbeafe; background: #eff6ff; }
+@media print { .app-footer { display: block !important; color: #555 !important; } }
 
 .layout { display: grid; grid-template-columns: 260px 1fr; min-height: calc(100vh - 72px); }
 .side {
@@ -239,6 +243,9 @@ button { cursor: pointer; transition: all 0.2s ease; }
   .nav { min-width: max-content; }
   .main { padding: 16px; }
 }
+
+/* Tata letak rekomendasi rencana yang lebih terstruktur */
+.plan-recommendation h3{line-height:1.35}.plan-recommendation .small{line-height:1.6}
 </style>
 </head>
 <body data-theme="dark">
@@ -252,13 +259,16 @@ button { cursor: pointer; transition: all 0.2s ease; }
     </div>
     <h3 style="font-size:20px;margin:0 0 6px;color:var(--slate-900)">Pilih Akses Portal</h3>
     <p class="muted small" style="margin:0">Silakan pilih jenis portal untuk memulai sesi.</p>
+    <div style="margin-top:14px;padding:11px 12px;border-radius:10px;background:var(--emerald-light);color:var(--slate-800);font-size:12px;line-height:1.55;text-align:left">
+      
+    </div>
     
     <div class="portal-options">
       <button class="portal-option" onclick="tryGuruLogin()">
         <span style="font-size:32px">👩‍🏫</span>
         <span>
           <b style="font-size:15px;display:block;color:var(--slate-900)">Portal Guru 🔒</b>
-          <small class="muted">Akses terlindungi PIN kata sandi untuk mengelola data & intervensi.</small>
+          <small class="muted">Akses portal guru menggunakan PIN. Ganti PIN bawaan saat pertama kali masuk.</small>
         </span>
       </button>
       <button class="portal-option" onclick="setPortal('murid')">
@@ -281,10 +291,6 @@ button { cursor: pointer; transition: all 0.2s ease; }
     <div class="user" style="gap:8px; flex-wrap:wrap;">
       <span id="userName">Portal Guru</span>
       <div id="avatarContainer"></div>
-      <!-- Tombol Cloud Google Sheets yang ditambahkan dengan aman -->
-      <button class="btn btn-success small" onclick="syncToCloud()" title="Sinkron ke Sheets" style="padding:8px 12px">☁️ Sinkron</button>
-      <button class="btn btn-secondary small" onclick="fetchFromCloud()" title="Tarik dari Sheets" style="padding:8px 12px">📥 Tarik</button>
-      <button class="btn btn-secondary small" onclick="openGasModal()" title="Pengaturan URL Sheets" style="padding:8px 12px">⚙️ URL</button>
       <button class="btn btn-secondary small" onclick="toggleTheme()" title="Ubah Tema Gelap/Terang" style="padding:8px 12px">🌓</button>
       <button class="btn btn-secondary small" onclick="openPortalChooser()" style="margin-left:4px">Ganti Portal</button>
     </div>
@@ -294,6 +300,7 @@ button { cursor: pointer; transition: all 0.2s ease; }
     <aside class="side" id="side"></aside>
     <main class="main" id="main"></main>
   </div>
+  <footer class="app-footer">©️ 2026 WIDYA SUARNI. All Rights Reserved. Reg. No. 001578250.</footer>
 </div>
 
 <div id="toast" class="toast"></div>
@@ -305,57 +312,48 @@ const DB_KEY = "NARASI_PRO_DB";
 const SESSION_KEY = "NARASI_PRO_SESSION";
 const STUDENT_SESSION_KEY = "NARASI_PRO_MURID";
 const THEME_KEY = "NARASI_THEME";
-const GAS_KEY = "NARASI_GAS_URL"; // Tambahan variabel URL Sheets
 
 const seed = {
-  students: [
-    {id: "M001", name: "Alya Putri", className: "V", pin: "1001", status: "Aktif", avatar: null},
-    {id: "M002", name: "Bima Pratama", className: "V", pin: "1002", status: "Aktif", avatar: null},
-    {id: "M003", name: "Citra Lestari", className: "V", pin: "1003", status: "Aktif", avatar: null}
-  ],
-  assessments: [
-    {id: "A001", studentId: "M001", type: "Diagnostik", subject: "Bahasa Indonesia", score: 82, date: "2026-09-20", note: "Memahami teks dengan baik"},
-    {id: "A002", studentId: "M002", type: "Formatif", subject: "Bahasa Indonesia", score: 62, date: "2026-09-21", note: "Perlu bimbingan ide pokok"},
-    {id: "A003", studentId: "M003", type: "Sumatif", subject: "Bahasa Indonesia", score: 88, date: "2026-09-22", note: "Sangat baik"}
-  ],
-  plans: [
-    {id: "P001", studentId: "M002", subject: "Bahasa Indonesia", title: "Pendampingan Membaca Terbimbing", text: "Latihan menemukan kalimat utama cerita.", status: "Rencana"}
-  ],
-  actions: [
-    {id: "ACT001", studentId: "M002", planId: "P001", subject: "Bahasa Indonesia", title: "Sesi Klinik Baca Jam Ke-0", text: "Pendampingan 15 menit sebelum KBM.", status: "Berjalan"}
-  ],
-  reassessments: [
-    {id: "R001", studentId: "M002", subject: "Bahasa Indonesia", initialScore: 62, score: 78, date: "2026-09-28", note: "Peningkatan signifikan"}
-  ],
+  students: [],
+  assessments: [],
+  plans: [],
+  actions: [],
+  reassessments: [],
   strategies: [
-    {id: "STR001", tier: "Intervensi Intensif", title: "Visual Story Mapping", desc: "Menggunakan diagram alir bergambar untuk memahami masalah tokoh."},
-    {id: "STR002", tier: "Gamifikasi", title: "Gamified Challenge & Reward Board", desc: "Mengubah asesmen atau materi sulit menjadi permainan papan atau kuis petualangan."},
-    {id: "STR003", tier: "Inquiry-Based", title: "Mystery Box / Phenomenon-Based Inquiry", desc: "Memulai pembelajaran dengan menyajikan fenomena unik atau kotak misteri."}
+    {id:"STR001",tier:"Literasi",title:"Peta Konsep dan Peta Cerita",desc:"Murid menyusun hubungan gagasan utama, detail pendukung, tokoh, latar, dan urutan peristiwa dalam peta visual. Cocok untuk pemahaman bacaan dan mengorganisasi informasi.",tags:["membaca","literasi","ide-pokok","pemahaman-bacaan","visual"]},
+    {id:"STR002",tier:"Gamifikasi",title:"Misi Bertahap dan Papan Kemajuan",desc:"Kompetensi dipecah menjadi misi kecil dengan umpan balik dan refleksi setelah setiap misi. Gunakan penghargaan berbasis usaha dan kemajuan, bukan perbandingan antarmurid.",tags:["motivasi","latihan","penguasaan","gamifikasi"]},
+    {id:"STR003",tier:"Inkuiri",title:"Inkuiri Berbasis Fenomena",desc:"Pembelajaran dimulai dari fenomena atau pertanyaan pemantik. Murid mengamati, menyusun pertanyaan, mengumpulkan bukti, lalu menjelaskan temuan.",tags:["inkuiri","sains","observasi","penalaran","ipas"]},
+    {id:"STR004",tier:"Latihan Memori",title:"Retrieval Practice (Latihan Mengingat)",desc:"Murid mencoba mengingat konsep tanpa melihat catatan melalui kuis singkat, kartu tanya-jawab, atau penjelasan dari ingatan. Guru memberi umpan balik setelahnya.",tags:["mengingat","konsep","kuis","pemahaman","semua"]},
+    {id:"STR005",tier:"Penguatan Bertahap",title:"Spaced Practice (Latihan Bersela)",desc:"Materi inti diulang dalam sesi singkat yang diberi jeda beberapa hari. Setiap sesi menggabungkan materi lama dan materi baru untuk memperkuat retensi.",tags:["mengingat","retensi","latihan","semua"]},
+    {id:"STR006",tier:"Pemodelan",title:"Worked Examples (Contoh Penyelesaian)",desc:"Guru memperlihatkan contoh penyelesaian lengkap sambil menjelaskan alasan tiap langkah. Murid kemudian mengerjakan contoh serupa dengan bantuan yang dikurangi bertahap.",tags:["matematika","prosedur","pemecahan-masalah","pemodelan","numerasi"]},
+    {id:"STR007",tier:"Scaffolding",title:"I Do – We Do – You Do",desc:"Guru mencontohkan keterampilan, kelas berlatih bersama, lalu murid mencoba mandiri. Bantuan dikurangi sesuai kesiapan dan bukti pemahaman murid.",tags:["prasyarat","mandiri","pemodelan","semua"]},
+    {id:"STR008",tier:"Kolaboratif",title:"Tutor Sebaya Terstruktur",desc:"Pasangan murid bergantian menjadi penjelas dan pendengar menggunakan panduan pertanyaan serta lembar cek. Guru tetap memantau ketepatan konsep dan partisipasi.",tags:["kolaborasi","komunikasi","literasi","numerasi","semua"]},
+    {id:"STR009",tier:"Diskusi",title:"Think – Pair – Share",desc:"Murid berpikir dan menulis jawaban sendiri, berdiskusi dengan pasangan, lalu membagikan hasil beserta alasan atau bukti kepada kelas.",tags:["diskusi","penalaran","argumentasi","berbicara","semua"]},
+    {id:"STR010",tier:"Pembelajaran Kooperatif",title:"Jigsaw (Kelompok Ahli)",desc:"Setiap anggota mempelajari bagian materi tertentu dalam kelompok ahli, lalu kembali mengajarkan bagian tersebut kepada kelompok asal. Cocok untuk materi yang dapat dibagi menjadi beberapa subtopik.",tags:["kolaborasi","membaca","pemahaman","presentasi","semua"]},
+    {id:"STR011",tier:"Numerasi",title:"Concrete – Pictorial – Abstract",desc:"Murid memahami konsep melalui benda nyata, beralih ke gambar atau model, lalu menggunakan simbol dan prosedur abstrak. Pastikan murid menjelaskan hubungan antarrepresentasi.",tags:["matematika","numerasi","pecahan","operasi-hitung","konkret"]},
+    {id:"STR012",tier:"Diferensiasi",title:"Pilihan Produk Belajar (Choice Board)",desc:"Murid memilih cara menunjukkan pemahaman, misalnya tulisan, diagram, presentasi, model, atau rekaman penjelasan. Semua pilihan menggunakan tujuan dan rubrik yang sama.",tags:["diferensiasi","minat","produk","kreativitas","semua"]},
+    {id:"STR013",tier:"Asesmen Formatif",title:"Exit Ticket dan Cek Pemahaman",desc:"Di akhir pembelajaran murid menjawab 1–3 pertanyaan singkat tentang konsep inti atau bagian yang masih membingungkan. Guru memakai hasilnya untuk menentukan tindak lanjut.",tags:["asesmen","umpan-balik","pemantauan","pemahaman","semua"]},
+    {id:"STR014",tier:"Pemecahan Masalah",title:"Problem-Based Learning",desc:"Murid mempelajari konsep melalui masalah kontekstual yang perlu dianalisis. Guru memandu identifikasi informasi, alternatif solusi, alasan, dan refleksi proses.",tags:["penalaran","pemecahan-masalah","kontekstual","ipas","matematika"]},
+    {id:"STR015",tier:"Proyek",title:"Mini Project dan Produk Nyata",desc:"Murid menerapkan beberapa kompetensi untuk menghasilkan karya atau solusi sederhana. Proyek dibagi menjadi tahap perencanaan, pengerjaan, umpan balik, dan presentasi.",tags:["proyek","kreativitas","kolaborasi","penerapan","semua"]},
+    {id:"STR016",tier:"Metakognitif",title:"Jurnal Refleksi dan Berpikir Lantang",desc:"Murid menjelaskan strategi yang digunakan, bagian yang sudah dipahami, kesulitan, dan langkah berikutnya. Guru dapat mencontohkan cara berpikir saat menyelesaikan tugas.",tags:["refleksi","metakognitif","pemahaman","mandiri","semua"]},
+    {id:"STR017",tier:"Literasi",title:"Reciprocal Teaching (Membaca Timbal Balik)",desc:"Murid bergiliran memprediksi isi, membuat pertanyaan, mengklarifikasi kata atau ide sulit, dan merangkum bacaan dengan panduan guru.",tags:["membaca","literasi","pemahaman-bacaan","merangkum"]},
+    {id:"STR018",tier:"Diferensiasi Proses",title:"Rotasi Pos Belajar",desc:"Murid berpindah di beberapa pos aktivitas: bimbingan guru, latihan mandiri, media manipulatif, dan kolaborasi. Tugas di setiap pos disesuaikan dengan tujuan belajar.",tags:["diferensiasi","kelompok-kecil","latihan","numerasi","literasi"]}
   ],
-  interventions: [
-    {id: "INT001", studentId: "M002", subject: "Bahasa Indonesia", title: "Intervensi Individu Ide Pokok", text: "Pendampingan kartu paragraf bergambar.", date: "2026-09-25"}
-  ],
-  reflections: [
-    {id: "REF001", date: "2026-09-28", note: "Intervensi visual sangat membantu Bima memahami teks."}
-  ],
-  materials: [
-    {id: "MAT001", title: "Permasalahan Tokoh & Solusi", subject: "Bahasa Indonesia", type: "Video", url: "https://www.youtube.com/watch?v=demo", description: "Langkah mudah menemukan masalah tokoh dalam cerita.", doneBy: {"M002": true}}
-  ],
-  tasks: [
-    {id: "TSK001", title: "Latihan Ide Pokok Paragraf", subject: "Bahasa Indonesia", due: "2026-10-05", description: "Tentukan ide pokok dari cerita pendek terlampir.", submissions: [
-      {studentId: "M002", answer: "Ide pokok paragraf pertama adalah perjuangan tokoh Alya membantu ibunya.", date: "2026-09-29 10:15"}
-    ]}
-  ],
+  interventions: [],
+  reflections: [],
+  impactRecords: [],
+  materials: [],
+  tasks: [],
   teacher: {
-    name: "Ibu Widya Suarni, S.Pd.",
-    nip: "199408122019032011",
+    name: "",
+    nip: "",
     pin: "123456",
-    subject: "Bahasa Indonesia",
-    school: "SD Negeri 23 Meulaboh",
-    schoolAddress: "Kabupaten Aceh Barat, Aceh",
+    subject: "",
+    school: "",
+    schoolAddress: "",
     avatar: null
   },
-  customSubjects: ["Bahasa Indonesia", "Matematika", "IPAS", "Pendidikan Pancasila", "Seni Budaya", "PJOK"]
+  customSubjects: ["Bahasa Indonesia", "Matematika", "IPAS", "Pendidikan Pancasila", "Pendidikan Agama", "Bahasa Inggris", "PJOK", "Seni Budaya", "Informatika", "Prakarya", "IPA", "IPS", "Biologi", "Fisika", "Kimia", "Ekonomi", "Sosiologi", "Geografi", "Sejarah", "PKN"]
 };
 
 let db = loadDB();
@@ -364,7 +362,6 @@ let currentStudentId = localStorage.getItem(STUDENT_SESSION_KEY) || null;
 let view = "home";
 let selectedSubject = localStorage.getItem("NARASI_SUBJECT") || "Bahasa Indonesia";
 let searchQuery = "";
-let gasUrl = localStorage.getItem(GAS_KEY) || ""; // Tambahan variabel URL Sheets
 
 initTheme();
 
@@ -384,7 +381,30 @@ function toggleTheme() {
 function loadDB() {
   try {
     const x = JSON.parse(localStorage.getItem(DB_KEY));
-    return x && Array.isArray(x.students) ? Object.assign(JSON.parse(JSON.stringify(seed)), x) : JSON.parse(JSON.stringify(seed));
+    const data = x && Array.isArray(x.students) ? Object.assign(JSON.parse(JSON.stringify(seed)), x) : JSON.parse(JSON.stringify(seed));
+    // Migrasi aman: data lama tetap dipertahankan dan diberi jenjang SD sebagai nilai bawaan.
+    data.students = (data.students || []).map(st => ({...st, level: st.level || "SD"}));
+    // Gabungkan strategi bawaan dengan strategi khusus guru dan rapikan duplikasi lama.
+    const strategyMap = new Map();
+    [...(seed.strategies || []), ...(Array.isArray(data.strategies) ? data.strategies : [])].forEach(st => {
+      if (!st || !st.title) return;
+      const legacyNames = {"visual story mapping":"Peta Konsep dan Peta Cerita", "gamified challenge & reward board":"Misi Bertahap dan Papan Kemajuan", "mystery box / phenomenon-based inquiry":"Inkuiri Berbasis Fenomena"};
+      const legacyTarget = legacyNames[String(st.title).trim().toLowerCase()];
+      if (legacyTarget) return; // Digantikan oleh versi strategi bawaan yang lebih terperinci.
+      const key = String(st.title).trim().toLocaleLowerCase("id-ID").replace(/\s+/g, " ");
+      const descKey = `${String(st.tier || "").trim().toLowerCase()}|${String(st.desc || "").trim().toLowerCase().replace(/\s+/g, " ")}`;
+      const sameDescription = descKey.length > 3 && [...strategyMap.values()].some(x =>
+        `${String(x.tier || "").trim().toLowerCase()}|${String(x.desc || "").trim().toLowerCase().replace(/\s+/g, " ")}` === descKey
+      );
+      if (!strategyMap.has(key) && !sameDescription) strategyMap.set(key, {...st, tags: Array.isArray(st.tags) ? st.tags : []});
+      else if (strategyMap.has(key)) {
+        const old = strategyMap.get(key);
+        strategyMap.set(key, {...old, ...st, id: old.id || st.id, tags: [...new Set([...(old.tags || []), ...(st.tags || [])])]});
+      }
+    });
+    data.strategies = [...strategyMap.values()];
+    data.customSubjects = [...new Set([...seed.customSubjects, ...(Array.isArray(data.customSubjects) ? data.customSubjects : [])])];
+    return data;
   } catch (e) { return JSON.parse(JSON.stringify(seed)); }
 }
 function saveDB() { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
@@ -419,12 +439,34 @@ function subjectFilterHTML() {
   return `<div class="student-filter">
     <b>Mata Pelajaran Aktif:</b>
     <select onchange="selectedSubject=this.value;localStorage.setItem('NARASI_SUBJECT',this.value);render()">
-      ${subs.map(s => `<option value="${s}" ${selectedSubject===s?"selected":""}>${s}</option>`).join("")}
+      ${subs.map(s => `<option value="${esc(s)}" ${selectedSubject===s?"selected":""}>${esc(s)}</option>`).join("")}
     </select>
+    <button class="btn btn-secondary small" onclick="manageSubjectsModal()">＋ Tambah Mapel</button>
     <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
       <input type="text" id="globalSearch" placeholder="🔍 Cari nama murid..." value="${esc(searchQuery)}" oninput="searchQuery=this.value;render()" style="padding:8px 12px;border-radius:8px;border:1px solid var(--slate-300);font-size:12px;width:180px">
     </div>
   </div>`;
+}
+
+function manageSubjectsModal() {
+  const m = modal("Kelola Mata Pelajaran", `
+    <p class="muted small">Tambahkan mata pelajaran sesuai kebutuhan SD, SMP, atau SMA. Nama mapel yang ditambahkan akan tersedia pada seluruh menu NARASI.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <input id="newSubjectName" placeholder="Contoh: Informatika, Biologi, Ekonomi..." style="flex:1;min-width:190px;padding:11px;border:1px solid var(--slate-300);border-radius:8px">
+      <button class="btn btn-primary" id="btnAddSubject">Tambah</button>
+    </div>
+    <div style="margin-top:16px"><b class="small">Daftar mata pelajaran</b><div id="subjectList" style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px">${getSubjectsList().map(sub=>`<span class="badge">${esc(sub)}</span>`).join("")}</div></div>
+  `);
+  m.querySelector("#btnAddSubject").onclick = () => {
+    const name = m.querySelector("#newSubjectName").value.trim().replace(/\s+/g," ");
+    if (!name) { toast("Nama mata pelajaran belum diisi.", "error"); return; }
+    const exists = getSubjectsList().some(x => x.toLowerCase() === name.toLowerCase());
+    if (exists) { toast("Mata pelajaran tersebut sudah ada.", "warn"); return; }
+    db.customSubjects = [...getSubjectsList(), name];
+    selectedSubject = name;
+    localStorage.setItem("NARASI_SUBJECT", name);
+    saveDB(); m.remove(); render(); toast("Mata pelajaran berhasil ditambahkan.", "success");
+  };
 }
 
 function narasiFlowHeader(activeLetter) {
@@ -512,11 +554,11 @@ function exportToWord() {
   const content = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
     <head><title>Laporan NARASI</title><style>body{font-family:Arial,sans-serif;} table{border-collapse:collapse;width:100%;} th,td{border:1px solid #333;padding:8px;font-size:12px;} th{background:#f2f2f2;}</style></head>
     <body>
-      <h2 style="text-align:center">${db.teacher.school || 'SD NEGERI 23 MEULABOH'}</h2>
-      <p style="text-align:center">${db.teacher.schoolAddress || 'Kabupaten Aceh Barat'}</p>
+      <h2 style="text-align:center">${esc(db.teacher.school || 'Nama Sekolah')}</h2>
+      <p style="text-align:center">${esc(db.teacher.schoolAddress || '')}</p>
       <hr><h3 style="text-align:center">LAPORAN PEMBELAJARAN TERPADU SIKLUS N-A-R-A-S-I</h3>
       <p style="text-align:center"><b>Mata Pelajaran: ${selectedSubject}</b></p><br>
-      <p><b>Guru Pengampu:</b> ${db.teacher.name}<br><b>NIP:</b> ${db.teacher.nip}</p>
+      <p><b>Guru Pengampu:</b> ${esc(db.teacher.name)}<br><b>NIP:</b> ${esc(db.teacher.nip)}</p>
       <h3>Rekapitulasi Capaian & Intervensi Murid</h3>
       <table><thead><tr><th>ID</th><th>Nama Murid</th><th>Nilai</th><th>Status</th><th>Rencana</th><th>Re-Asesmen</th></tr></thead>
       <tbody>
@@ -535,41 +577,155 @@ function exportToWord() {
   toast("Laporan Word (.doc) berhasil diunduh!", "success");
 }
 
+let guruLoginAttempts = 0;
+let guruLockUntil = 0;
+
 function tryGuruLogin() {
+  if (Date.now() < guruLockUntil) {
+    const wait = Math.ceil((guruLockUntil - Date.now()) / 1000);
+    toast(`Terlalu banyak percobaan. Coba lagi dalam ${wait} detik.`, "error"); return;
+  }
   const m = modal("🔒 Akses Portal Guru", `
-    <p class="muted small">Masukkan PIN Kata Sandi Guru untuk melanjutkan.</p>
+    <p class="muted small">Masukkan PIN guru. Untuk keamanan, segera ganti PIN bawaan sebelum memasukkan data murid.</p>
     <div style="display:grid;gap:12px;margin-top:12px">
-      <div><label class="small font-weight:700">PIN Sandi Guru</label><input id="gPinInput" type="password" placeholder="Default: 123456" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
+      <div><label class="small font-weight-700">PIN Sandi Guru</label><input id="gPinInput" type="password" inputmode="numeric" autocomplete="current-password" placeholder="Masukkan PIN" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></div>
     </div>
   `, `<button class="btn btn-primary" id="btnGLogin">Masuk Portal Guru</button>`);
 
   m.querySelector("#btnGLogin").onclick = () => {
-    if (m.querySelector("#gPinInput").value.trim() === (db.teacher.pin || "123456")) {
-      m.remove(); setPortal('guru'); toast("Berhasil masuk Portal Guru!", "success");
-    } else { toast("PIN Sandi Guru salah!", "error"); }
+    if (m.querySelector("#gPinInput").value === (db.teacher.pin || "123456")) {
+      guruLoginAttempts = 0;
+      m.remove();
+      if (!db.teacher.pin || db.teacher.pin === "123456") {
+        changeInitialGuruPin(() => { setPortal('guru'); toast("PIN diperbarui. Selamat menggunakan NARASI!", "success"); });
+      } else { setPortal('guru'); toast("Berhasil masuk Portal Guru!", "success"); }
+    } else {
+      guruLoginAttempts++;
+      if (guruLoginAttempts >= 5) { guruLockUntil = Date.now() + 30000; guruLoginAttempts = 0; m.remove(); toast("Akses ditunda 30 detik karena terlalu banyak percobaan.", "error"); }
+      else toast(`PIN salah. Sisa percobaan: ${5 - guruLoginAttempts}.`, "error");
+    }
+  };
+}
+
+function changeInitialGuruPin(onSuccess) {
+  const m = modal("🔐 Buat PIN Guru Baru", `
+    <p class="muted small">PIN bawaan harus diganti sebelum portal guru dibuka. Gunakan minimal 8 angka dan jangan memakai tanggal lahir atau PIN yang mudah ditebak.</p>
+    <p class="muted small"><b>Catatan privasi:</b> PIN membatasi akses melalui tampilan aplikasi, tetapi belum mengenkripsi file atau data browser. Jangan gunakan ini sebagai satu-satunya perlindungan untuk data murid yang sangat sensitif.</p>
+    <div style="display:grid;gap:12px">
+      <div><label class="small font-weight-700">PIN baru</label><input id="newGuruPin" type="password" inputmode="numeric" autocomplete="new-password" style="width:100%;padding:10px;border-radius:8px"></div>
+      <div><label class="small font-weight-700">Ulangi PIN baru</label><input id="confirmGuruPin" type="password" inputmode="numeric" autocomplete="new-password" style="width:100%;padding:10px;border-radius:8px"></div>
+    </div>
+  `, `<button class="btn btn-primary" id="saveInitialGuruPin">Simpan PIN</button>`);
+  m.querySelector("#saveInitialGuruPin").onclick = () => {
+    const pin = m.querySelector("#newGuruPin").value;
+    const confirm = m.querySelector("#confirmGuruPin").value;
+    if (!/^\d{8,}$/.test(pin)) { toast("PIN harus minimal 8 angka.", "error"); return; }
+    if (pin !== confirm) { toast("Konfirmasi PIN tidak sama.", "error"); return; }
+    db.teacher.pin = pin; saveDB(); m.remove(); onSuccess();
   };
 }
 
 function backupDatabaseJSON() {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' }));
+  const backup = { app: "NARASI Pro", backupVersion: 2, createdAt: new Date().toISOString(), data: db };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url;
   a.download = `NARASI_BACKUP_${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  toast("Cadangan data (.json) berhasil diunduh!", "success");
+  a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast("Cadangan data berhasil diunduh. Simpan di tempat pribadi yang aman.", "success");
 }
 
 function restoreDatabaseJSON(fileInput) {
   const file = fileInput.files[0];
   if (!file) return;
+  if (file.size > 20 * 1024 * 1024) {
+    toast("Ukuran backup terlalu besar (maksimal 20 MB).", "error");
+    fileInput.value = "";
+    return;
+  }
+
+  if (!confirm(`Pulihkan DATA MURID DAN NILAI dari backup JSON?
+
+Yang akan diperbarui: daftar murid, asesmen/nilai, rencana pendampingan, tindak lanjut, intervensi, re-asesmen, dan catatan dampak murid.
+
+Yang TETAP dipertahankan: menu dan fitur aplikasi terbaru, Bank Strategi terbaru beserta strategi buatan guru, profil guru, mata pelajaran khusus, materi, tugas, dan refleksi guru.
+
+Data murid dan nilai yang sedang ada akan diganti dengan data dari backup. Sebelum lanjut, aplikasi akan mengunduh cadangan kondisi saat ini. Lanjutkan?`)) {
+    fileInput.value = "";
+    return;
+  }
+
+  // Cadangkan kondisi saat ini sebelum mengganti data murid.
+  backupDatabaseJSON();
+
   const reader = new FileReader();
   reader.onload = function(e) {
     try {
-      const restored = JSON.parse(e.target.result);
-      if (restored && Array.isArray(restored.students)) {
-        db = Object.assign(JSON.parse(JSON.stringify(seed)), restored);
-        saveDB(); render(); toast("Data NARASI berhasil dipulihkan!", "success");
-      } else { toast("Berkas JSON tidak valid!", "error"); }
-    } catch (err) { toast("Gagal membaca berkas.", "error"); }
+      const parsed = JSON.parse(e.target.result);
+      const restored = parsed && parsed.data && Array.isArray(parsed.data.students)
+        ? parsed.data
+        : parsed;
+
+      if (!restored || !Array.isArray(restored.students) ||
+          !Array.isArray(restored.assessments)) {
+        throw new Error("Backup tidak memuat data murid dan asesmen yang diperlukan.");
+      }
+
+      // Mulai dari database yang sedang aktif. Dengan demikian seluruh menu,
+      // fitur, strategi terbaru, profil, materi, tugas, dan pengaturan tetap utuh.
+      const next = Object.assign({}, db);
+
+      // Hanya bagian data murid dan rekam perkembangan/nilai yang dipulihkan.
+      const studentDataKeys = [
+        "students",
+        "assessments",
+        "plans",
+        "actions",
+        "interventions",
+        "reassessments",
+        "impactRecords"
+      ];
+
+      studentDataKeys.forEach(key => {
+        if (Array.isArray(restored[key])) next[key] = restored[key];
+      });
+
+      // Jaga kompatibilitas backup lama yang belum memiliki beberapa daftar.
+      studentDataKeys.forEach(key => {
+        if (!Array.isArray(next[key])) next[key] = [];
+      });
+
+      next.students = next.students.map(st => ({...st, level: st.level || "SD"}));
+
+      // Tegaskan bahwa konten aplikasi terbaru tidak diambil dari file backup.
+      next.strategies = db.strategies;
+      next.teacher = db.teacher;
+      next.customSubjects = db.customSubjects;
+      next.materials = db.materials;
+      next.tasks = db.tasks;
+      next.reflections = db.reflections;
+
+      db = next;
+      saveDB();
+
+      role = null;
+      currentStudentId = null;
+      localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(STUDENT_SESSION_KEY);
+      document.getElementById("app").classList.add("hidden");
+      document.getElementById("portalChooser").classList.remove("hidden");
+
+      toast("Data murid dan nilai berhasil dipulihkan. Menu dan Bank Strategi terbaru tetap dipertahankan.", "success");
+    } catch (err) {
+      console.error("Pemulihan backup gagal:", err);
+      toast("Backup tidak valid atau tidak lengkap. Data aplikasi tidak diubah.", "error");
+    }
+    fileInput.value = "";
+  };
+
+  reader.onerror = () => {
+    toast("Berkas backup gagal dibaca.", "error");
+    fileInput.value = "";
   };
   reader.readAsText(file);
 }
@@ -578,20 +734,64 @@ function editTeacherProfileModal() {
   const t = db.teacher;
   const m = modal("⚙️ Edit Profil Guru & Sekolah", `
     <div style="display:grid;gap:12px">
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <img id="epAvatarPreview" class="profile-photo-preview" src="${t.avatar || ''}" alt="Foto profil" style="${t.avatar ? '' : 'display:none'}">
+        <div id="epAvatarPlaceholder" class="avatar" style="width:88px;height:88px;font-size:28px;${t.avatar ? 'display:none' : ''}">${esc((t.name || 'W').charAt(0).toUpperCase())}</div>
+        <div style="flex:1;min-width:190px">
+          <label class="small font-weight:700" for="epAvatar">Foto Profil Guru</label>
+          <input id="epAvatar" type="file" accept="image/*" style="display:block;width:100%;margin-top:7px">
+          <div class="muted small" style="margin-top:5px">Pilih foto dari perangkat (JPG, PNG, atau WEBP).</div>
+          <button type="button" class="btn btn-secondary small" id="btnRemoveAvatar" style="margin-top:8px">Hapus Foto</button>
+        </div>
+      </div>
       <div><label class="small font-weight:700">Nama Lengkap & Gelar</label><input id="epName" value="${esc(t.name)}" style="width:100%;padding:10px;border-radius:8px"></div>
       <div><label class="small font-weight:700">NIP</label><input id="epNip" value="${esc(t.nip)}" style="width:100%;padding:10px;border-radius:8px"></div>
-      <div><label class="small font-weight:700">PIN Sandi Baru</label><input id="epPin" type="password" value="${esc(t.pin || '123456')}" style="width:100%;padding:10px;border-radius:8px"></div>
+      <div><label class="small font-weight:700">PIN Sandi Baru</label><input id="epPin" type="password" inputmode="numeric" placeholder="Minimal 8 angka" value="${esc(t.pin || '')}" style="width:100%;padding:10px;border-radius:8px"><div class="muted small">Gunakan minimal 8 angka. PIN tidak boleh sama dengan PIN yang mudah ditebak.</div></div>
       <div><label class="small font-weight:700">Nama Sekolah</label><input id="epSchool" value="${esc(t.school || '')}" style="width:100%;padding:10px;border-radius:8px"></div>
       <div><label class="small font-weight:700">Alamat Sekolah</label><input id="epAddress" value="${esc(t.schoolAddress || '')}" style="width:100%;padding:10px;border-radius:8px"></div>
     </div>
   `, `<button class="btn btn-primary" id="btnSaveEp">Simpan Perubahan</button>`);
 
+  let pendingAvatar = t.avatar || null;
+  m.querySelector("#epAvatar").onchange = () => {
+    const file = m.querySelector("#epAvatar").files[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { toast("Pilih berkas gambar yang valid.", "error"); return; }
+    if (file.size > 8 * 1024 * 1024) { toast("Ukuran foto maksimal 8 MB.", "warn"); return; }
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const image = new Image();
+      image.onload = () => {
+        const max = 512, scale = Math.min(1, max / Math.max(image.width, image.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+        pendingAvatar = canvas.toDataURL("image/jpeg", 0.82);
+        m.querySelector("#epAvatarPreview").src = pendingAvatar;
+        m.querySelector("#epAvatarPreview").style.display = "block";
+        m.querySelector("#epAvatarPlaceholder").style.display = "none";
+      };
+      image.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+  m.querySelector("#btnRemoveAvatar").onclick = () => {
+    pendingAvatar = null;
+    m.querySelector("#epAvatar").value = "";
+    m.querySelector("#epAvatarPreview").style.display = "none";
+    m.querySelector("#epAvatarPlaceholder").style.display = "grid";
+  };
+
   m.querySelector("#btnSaveEp").onclick = () => {
+    const nextPin = m.querySelector("#epPin").value.trim();
+    if (nextPin && !/^\d{8,}$/.test(nextPin)) { toast("PIN guru harus minimal 8 angka.", "error"); return; }
     db.teacher.name = m.querySelector("#epName").value.trim() || db.teacher.name;
     db.teacher.nip = m.querySelector("#epNip").value.trim();
-    db.teacher.pin = m.querySelector("#epPin").value.trim() || db.teacher.pin;
+    if (nextPin) db.teacher.pin = nextPin;
     db.teacher.school = m.querySelector("#epSchool").value.trim();
     db.teacher.schoolAddress = m.querySelector("#epAddress").value.trim();
+    db.teacher.avatar = pendingAvatar;
     saveDB(); m.remove(); showApp(); render(); toast("Profil berhasil diperbarui!", "success");
   };
 }
@@ -634,50 +834,8 @@ function showApp() {
   const s = currentStudent();
   const name = role === "guru" ? (db.teacher.name || "Portal Guru") : (s ? s.name : "Portal Murid");
   document.getElementById("userName").textContent = name;
-  document.getElementById("avatarContainer").innerHTML = `<div class="avatar">${name[0].toUpperCase()}</div>`;
-}
-
-// Fungsi Modal Pengaturan URL Google Sheets
-function openGasModal() {
-  const m = modal("⚙️ Pengaturan URL Google Sheets", `
-    <p class="muted small">Tempelkan URL Web App dari hasil Deploy Google Apps Script Anda di bawah ini:</p>
-    <input id="gasInput" value="${gasUrl}" placeholder="https://script.google.com/macros/s/.../exec" style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1;font-size:12px;margin-top:8px">
-  `, `<button class="btn btn-primary" onclick="saveGasUrl()">Simpan URL</button>`);
-}
-
-function saveGasUrl() {
-  const input = document.getElementById("gasInput").value.trim();
-  if (!input) { toast("⚠️ URL tidak boleh kosong!", "error"); return; }
-  gasUrl = input;
-  localStorage.setItem(GAS_KEY, gasUrl);
-  document.querySelector(".modal-backdrop").remove();
-  toast("✅ URL Google Sheets berhasil disimpan!", "success");
-}
-
-async function syncToCloud() {
-  if (!gasUrl) { openGasModal(); return; }
-  toast("⏳ Mengirim data ke Google Sheets...", "success");
-  try {
-    const res = await fetch(gasUrl, { method: "POST", body: JSON.stringify(db) });
-    const json = await res.json();
-    if (json.status === "success") { toast("✅ " + json.message, "success"); } 
-    else { toast("❌ Gagal: " + json.message, "error"); }
-  } catch(e) { toast("❌ Gagal terhubung ke internet.", "error"); }
-}
-
-async function fetchFromCloud() {
-  if (!gasUrl) { openGasModal(); return; }
-  toast("⏳ Menarik data dari Google Sheets...", "success");
-  try {
-    const res = await fetch(gasUrl);
-    const json = await res.json();
-    if (json.status === "success" && json.data) {
-      db = json.data;
-      saveDB();
-      render();
-      toast("✅ Data lokal berhasil diperbarui dari Cloud!", "success");
-    } else { toast("⚠️ Data cloud masih kosong.", "warn"); }
-  } catch(e) { toast("❌ Gagal menarik data dari cloud.", "error"); }
+  const avatar = role === "guru" ? db.teacher.avatar : (s ? s.avatar : null);
+  document.getElementById("avatarContainer").innerHTML = `<div class="avatar">${avatar ? `<img src="${avatar}" alt="Foto profil">` : name[0].toUpperCase()}</div>`;
 }
 
 const teacherNav = [
@@ -689,6 +847,7 @@ const teacherNav = [
   ["strategi", "S — Bank Strategi"],
   ["intervensi", "I — Intervensi Khusus"],
   ["reassess", "↻ Re-Asesmen"],
+  ["impact", "🏅 Bukti Dampak Murid"],
   ["students", "👥 Kelola Murid"],
   ["reflection", "📝 Jurnal Refleksi"],
   ["materials", "📚 Kelola Materi"],
@@ -722,7 +881,7 @@ function render() {
   const pages = role === "guru" ? {
     home: teacherHomeView, nilai: nilaiView, analisis: analisisView,
     rencana: rencanaView, aksi: aksiView, strategi: strategiView,
-    intervensi: intervensiView, reassess: reassessView,
+    intervensi: intervensiView, reassess: reassessView, impact: impactView,
     students: studentsMgmtView, reflection: reflectionView,
     materials: materialsMgmtView, tasks: tasksMgmtView, reports: reportsView
   } : {
@@ -758,6 +917,7 @@ function teacherHomeView() {
       <div class="card"><div class="stat-label">Total Peserta Didik</div><div class="stat">${db.students.length}</div></div>
       <div class="card"><div class="stat-label">Perlu Intervensi</div><div class="stat" style="color:var(--rose)">${list.filter(x => x.avg > 0 && x.avg < target).length}</div></div>
       <div class="card"><div class="stat-label">Target Tercapai</div><div class="stat" style="color:var(--emerald)">${list.filter(x => x.avg >= target).length}</div></div>
+      <div class="card"><div class="stat-label">Bukti Dampak Tercatat</div><div class="stat" style="color:var(--blue)">${(db.impactRecords || []).filter(x => x.subject === selectedSubject).length}</div></div>
     </div>
 
     <div class="section" style="margin-top:20px">
@@ -791,7 +951,7 @@ function nilaiView() {
     <div class="section">
       <div class="table-wrap">
         <table class="table">
-          <thead><tr><th>Nama Murid</th><th>Jenis Asesmen</th><th>Nilai</th><th>Tanggal</th><th>Catatan Guru</th></tr></thead>
+          <thead><tr><th>Nama Murid</th><th>Jenis Asesmen</th><th>Nilai</th><th>Tanggal</th><th>Indikator / Catatan Guru</th><th>Aksi</th></tr></thead>
           <tbody>
             ${filtered.map(a => `<tr>
               <td><b>${esc(student(a.studentId)?.name)}</b></td>
@@ -799,6 +959,7 @@ function nilaiView() {
               <td><b style="color:var(--blue)">${a.score}</b></td>
               <td>${esc(a.date)}</td>
               <td>${esc(a.note)}</td>
+              <td><button class="btn btn-secondary small" onclick="editNarasiRecord('assessment','${a.id}')">Edit</button></td>
             </tr>`).join('') || `<tr><td colspan="5"><div class="empty-state"><div class="icon">📭</div><div>Belum ada data asesmen untuk mapel ini.</div></div></td></tr>`}
           </tbody>
         </table>
@@ -813,26 +974,106 @@ function addAssessmentModal() {
       <div><label class="small font-weight:700">Peserta Didik</label><select id="aSt" style="width:100%;padding:10px;border-radius:8px">${db.students.map(s => `<option value="${s.id}">${s.name}</option>`).join("")}</select></div>
       <div><label class="small font-weight:700">Jenis Asesmen</label><select id="aType" style="width:100%;padding:10px;border-radius:8px"><option>Diagnostik</option><option>Formatif</option><option>Sumatif</option></select></div>
       <div><label class="small font-weight:700">Nilai (0-100)</label><input id="aScore" type="number" value="75" style="width:100%;padding:10px;border-radius:8px"></div>
-      <div><label class="small font-weight:700">Catatan / Keterangan</label><input id="aNote" placeholder="Keterangan pencapaian..." style="width:100%;padding:10px;border-radius:8px"></div>
+      <div><label class="small font-weight:700">Kompetensi / Indikator yang diuji (disarankan diisi)</label><input id="aSkill" placeholder="Contoh: menentukan ide pokok paragraf" style="width:100%;padding:10px;border-radius:8px"></div>
+      <div><label class="small font-weight:700">Catatan / Keterangan Guru</label><input id="aNote" placeholder="Contoh: masih kesulitan menemukan informasi tersurat..." style="width:100%;padding:10px;border-radius:8px"></div>
     </div>
   `, `<button class="btn btn-primary" id="btnSaveAss">Simpan Nilai</button>`);
 
   m.querySelector("#btnSaveAss").onclick = () => {
+    const score = Number(m.querySelector("#aScore").value);
+    if (!Number.isFinite(score) || score < 0 || score > 100) { toast("Nilai harus berada pada rentang 0–100.", "error"); return; }
     db.assessments.push({
       id: uid("A"), studentId: m.querySelector("#aSt").value,
       subject: selectedSubject, type: m.querySelector("#aType").value,
-      score: Number(m.querySelector("#aScore").value), date: new Date().toISOString().slice(0, 10),
-      note: m.querySelector("#aNote").value.trim()
+      score, date: new Date().toISOString().slice(0, 10),
+      skill: m.querySelector("#aSkill").value.trim(), note: m.querySelector("#aNote").value.trim()
     });
     saveDB(); m.remove(); render(); toast("Nilai asesmen berhasil disimpan!", "success");
   };
 }
 
+function buildLearningRecommendation(studentRecord, assessments) {
+  const scores = assessments.map(a => Number(a.score)).filter(n => Number.isFinite(n));
+  const avg = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : 0;
+  const details = assessments.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const evidenceText = details.map(a => `${a.skill||''} ${a.note||''}`).join(' ').toLowerCase();
+  const has = (...words) => words.some(w => evidenceText.includes(w));
+  let focus = 'penguatan kompetensi pada materi yang sedang dipelajari';
+  let diagnosis = 'Data indikator belum cukup spesifik. Guru perlu mengamati jawaban murid untuk menemukan bagian yang belum dikuasai.';
+  let strategy = 'Latihan bertahap dengan contoh konkret, pemodelan oleh guru, dan umpan balik langsung';
+  let intervention = 'Pendampingan kelompok kecil, latihan singkat terarah, dan pemeriksaan pemahaman setelah setiap langkah';
+  let activity = 'Guru memberikan contoh, mengerjakan satu soal bersama murid, lalu memberi latihan mandiri bertingkat.';
+  if (has('ide pokok','gagasan utama','kalimat utama')) {
+    focus = 'menentukan ide pokok dan kalimat utama';
+    diagnosis = 'Catatan asesmen mengarah pada kesulitan mengenali gagasan utama dan membedakannya dari informasi pendukung.';
+    strategy = 'Visual Story Mapping: memberi warna berbeda pada kalimat utama dan informasi pendukung, lalu merangkum isi paragraf';
+    intervention = 'Bimbingan individual menggunakan paragraf pendek, penandaan kata kunci, dan latihan menemukan ide pokok secara bertahap';
+    activity = 'Guru memodelkan cara menemukan kata kunci, membimbing murid menandai kalimat utama, kemudian meminta murid menjelaskan alasannya.';
+  } else if (has('membaca','bacaan','teks','informasi tersurat','informasi tersirat')) {
+    focus = 'memahami isi bacaan dan menemukan informasi penting';
+    diagnosis = 'Catatan asesmen menunjukkan perlunya penguatan pemahaman bacaan dan pengambilan informasi dari teks.';
+    strategy = 'Membaca terpandu dengan pertanyaan 5W1H, penandaan kata kunci, dan peta isi bacaan';
+    intervention = 'Teks pendek sesuai tingkat kemampuan, membaca berulang, pertanyaan bertahap, dan diskusi satu lawan satu';
+    activity = 'Murid membaca teks pendek, menandai informasi penting, menjawab pertanyaan terpandu, lalu menceritakan kembali isi bacaan.';
+  } else if (has('operasi hitung','perkalian','pembagian','penjumlahan','pengurangan','pecahan','matematika','soal cerita')) {
+    focus = 'memahami konsep dan langkah penyelesaian soal matematika';
+    diagnosis = 'Catatan asesmen mengarah pada kesulitan memahami konsep atau memilih langkah penyelesaian.';
+    strategy = 'Concrete–Pictorial–Abstract: mulai dari benda konkret, gambar/model, kemudian simbol atau algoritma';
+    intervention = 'Latihan satu jenis keterampilan dalam kelompok kecil, alat peraga/manipulatif, dan soal bertingkat';
+    activity = 'Guru memperagakan konsep dengan benda atau gambar, menyelesaikan contoh bersama, kemudian memberi soal dengan tingkat kesulitan bertahap.';
+  } else if (has('menganalisis','menyimpulkan','alasan','menjelaskan')) {
+    focus = 'menjelaskan alasan, menganalisis informasi, dan menyusun kesimpulan';
+    diagnosis = 'Catatan asesmen menunjukkan kemampuan penalaran atau penyusunan alasan masih perlu diperkuat.';
+    strategy = 'Think–Pair–Share dan pertanyaan penuntun berbasis bukti';
+    intervention = 'Diskusi berpasangan dengan kerangka kalimat “Saya berpendapat ... karena ...” dan umpan balik guru';
+    activity = 'Murid mengamati contoh, menyampaikan pendapat, menunjukkan bukti pendukung, lalu menyusun kesimpulan.';
+  } else if (has('belum paham','belum memahami','kesulitan','tidak mampu','perlu bimbingan','belum bisa')) {
+    diagnosis = 'Catatan guru menunjukkan masih ada bagian materi yang belum dikuasai. Indikator spesifik perlu dikonfirmasi melalui pemeriksaan jawaban murid.';
+  }
+  let levelAction;
+  if (avg < 50) levelAction = {label:'Intervensi intensif', plan:'Mulai dari prasyarat dan konsep paling dasar. Berikan satu langkah pada satu waktu, contoh konkret, dan pendampingan individual.', dosage:'10–15 menit per sesi, 3 kali dalam sepekan, lalu cek pemahaman singkat'};
+  else if (avg < 75) levelAction = {label:'Penguatan terarah', plan:'Latihan terbimbing pada kompetensi yang belum stabil, dilanjutkan latihan mandiri dengan tingkat kesulitan bertahap.', dosage:'15–20 menit per sesi, 2–3 kali dalam sepekan'};
+  else if (avg < 90) levelAction = {label:'Penguatan dan pengayaan', plan:'Pertahankan kompetensi melalui latihan penerapan pada konteks baru dan soal yang menuntut alasan.', dosage:'Satu kegiatan penguatan dan satu tugas transfer pada pekan berjalan'};
+  else levelAction = {label:'Pengayaan', plan:'Berikan tantangan lanjutan, proyek mini, atau tugas eksplorasi agar murid menerapkan kompetensi pada situasi baru.', dosage:'Satu tugas pengayaan terbuka sesuai minat murid'};
+  const evidenceAndFocus = `${focus} ${evidenceText}`.toLowerCase();
+  const topicTags = [];
+  if (/ide pokok|gagasan utama|kalimat utama|membaca|bacaan|teks|informasi/.test(evidenceAndFocus)) topicTags.push("membaca","literasi","ide-pokok","pemahaman-bacaan");
+  if (/matematika|operasi hitung|perkalian|pembagian|penjumlahan|pengurangan|pecahan|soal cerita/.test(evidenceAndFocus)) topicTags.push("matematika","numerasi","operasi-hitung","konkret");
+  if (/menganalisis|menyimpulkan|alasan|menjelaskan|penalaran/.test(evidenceAndFocus)) topicTags.push("penalaran","argumentasi","diskusi","pemecahan-masalah");
+  if (/motivasi|minat|bosan|percaya diri/.test(evidenceAndFocus)) topicTags.push("motivasi","minat","gamifikasi");
+  const rankedStrategies = (db.strategies || []).map(st => {
+    const haystack = `${st.title} ${st.desc} ${st.tier}`.toLowerCase();
+    const tags = Array.isArray(st.tags) ? st.tags : [];
+    let score = tags.filter(tag => topicTags.includes(String(tag).toLowerCase())).length * 3;
+    if (tags.includes("semua")) score += 1;
+    if (/membaca|bacaan|teks/.test(focus) && /baca|literasi|teks|peta/.test(haystack)) score += 2;
+    if (/matematika|soal matematika/.test(focus) && /matematika|numerasi|konkret|contoh/.test(haystack)) score += 2;
+    if (/penalaran|kesimpulan|alasan/.test(focus) && /diskusi|masalah|argumentasi|inkuiri/.test(haystack)) score += 2;
+    return {st, score};
+  }).filter(x => x.score > 0).sort((a,b) => b.score-a.score);
+  const matched = rankedStrategies.slice(0,3).map(x => x.st);
+  const baseline = avg;
+  const targetScore = avg < 75 ? Math.min(100, Math.max(75, avg + 15)) : Math.min(100, avg + 5);
+  const durationWeeks = avg < 50 ? 3 : 2;
+  const sessionsPerWeek = avg < 50 ? 3 : avg < 75 ? 2 : 1;
+  const minutesPerSession = avg < 50 ? 20 : avg < 75 ? 25 : 30;
+  const totalSessions = durationWeeks * sessionsPerWeek;
+  const successCriteria = avg < 75
+    ? `Nilai asesmen ulang minimal ${targetScore} (atau meningkat sekurang-kurangnya 15 poin bila target belum tercapai), serta menjawab benar minimal 4 dari 5 soal pada indikator fokus.`
+    : `Mempertahankan nilai minimal ${baseline} dan mencapai minimal ${targetScore} pada tugas penerapan/pengayaan, dengan sekurang-kurangnya 4 dari 5 kriteria rubrik terpenuhi.`;
+  const monitoring = `Catat hasil setiap sesi; gunakan 3 soal cek pemahaman di akhir sesi. Pada akhir minggu ke-${durationWeeks}, lakukan asesmen ulang dengan indikator dan tingkat kesulitan setara.`;
+  const schedule = `${durationWeeks} minggu; ${sessionsPerWeek} kali per minggu; ${minutesPerSession} menit per sesi (${totalSessions} sesi).`;
+  const measurablePlan = avg < 75
+    ? `Dalam ${durationWeeks} minggu, murid mengikuti ${totalSessions} sesi pendampingan. Target: nilai meningkat dari ${baseline} menjadi sekurang-kurangnya ${targetScore}, dan minimal 4 dari 5 soal indikator fokus dijawab benar.`
+    : `Dalam ${durationWeeks} minggu, murid mengikuti ${totalSessions} kegiatan penguatan/pengayaan. Target: mempertahankan capaian minimal ${baseline} dan mencapai ${targetScore} pada tugas penerapan dengan minimal 4 dari 5 kriteria rubrik terpenuhi.`;
+  return {avg, focus, diagnosis, strategy, intervention, activity, levelAction, matched, hasIndicator: details.some(a=>!!a.skill), baseline, targetScore, durationWeeks, sessionsPerWeek, minutesPerSession, totalSessions, successCriteria, monitoring, schedule, measurablePlan};
+}
+
 function analisisView() {
   const list = db.students.map(s => {
     const ass = db.assessments.filter(a => a.studentId === s.id && a.subject === selectedSubject);
-    const avg = ass.length ? Math.round(ass.reduce((n, a) => n + a.score, 0) / ass.length) : 0;
-    return { student: s, avg };
+    const rec = buildLearningRecommendation(s, ass);
+    return { student: s, avg: rec.avg, rec, ass };
   }).filter(x => x.avg > 0 && x.student.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return `
@@ -840,25 +1081,57 @@ function analisisView() {
     ${subjectFilterHTML()}
     ${narasiFlowHeader('A')}
     <div class="section">
-      <div class="table-wrap">
-        <table class="table">
-          <thead><tr><th>Nama Murid</th><th>Rata-Rata Nilai</th><th>Status Target</th><th>Tindak Lanjut</th></tr></thead>
-          <tbody>
-            ${list.map(x => `<tr>
-              <td><b>${esc(x.student.name)}</b></td>
-              <td><b>${x.avg}</b></td>
-              <td><span class="badge ${x.avg>=75?'':'warn'}">${x.avg>=75?'Tuntas':'Perlu Pendampingan'}</span></td>
-              <td><button class="btn btn-primary small" onclick="quickAddPlan('${x.student.id}')">Buat Rencana (R)</button></td>
-            </tr>`).join('') || `<tr><td colspan="4"><div class="empty-state"><div class="icon">📊</div><div>Belum ada data analisis.</div></div></td></tr>`}
-          </tbody>
-        </table>
+      <div class="notice" style="margin-bottom:14px;padding:12px;border-radius:10px;background:var(--blue-soft,#eff6ff)">
+        <b>Rekomendasi Pembelajaran NARASI</b><div class="small">Rekomendasi disusun berdasarkan capaian nilai, indikator/kompetensi, dan catatan guru. Periksa kesesuaiannya dengan hasil pekerjaan dan kebutuhan belajar murid sebelum diterapkan.</div>
       </div>
+      ${list.map(x => `<div class="card" style="margin-bottom:14px;padding:16px">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap">
+          <div><b>${esc(x.student.name)}</b><div class="muted small">${esc(x.student.level||'SD')} • Kelas ${esc(x.student.className||'-')} • ${x.ass.length} catatan asesmen</div></div>
+          <div><span class="badge ${x.avg>=75?'':'warn'}">Nilai rata-rata: ${x.avg}</span> <span class="badge">${esc(x.rec.levelAction.label)}</span></div>
+        </div>
+        <div class="small" style="margin-top:12px"><b>Temuan analisis:</b> ${esc(x.rec.diagnosis)}</div>
+        <div class="small" style="margin-top:7px"><b>Fokus kompetensi:</b> ${esc(x.rec.focus)}</div>
+        <div class="small" style="margin-top:7px"><b>Rekomendasi strategi:</b> ${esc(x.rec.strategy)}</div>
+        <div class="small" style="margin-top:7px"><b>Rencana pembelajaran:</b> ${esc(x.rec.levelAction.plan)} ${esc(x.rec.activity)}</div>
+        <div class="small" style="margin-top:7px"><b>Intervensi:</b> ${esc(x.rec.intervention)}</div>
+        <div class="small" style="margin-top:7px"><b>Frekuensi yang disarankan:</b> ${esc(x.rec.levelAction.dosage)}</div>
+        ${x.rec.matched.length?`<div class="small" style="margin-top:7px"><b>Bank strategi yang mungkin sesuai:</b> ${x.rec.matched.map(st=>esc(st.title)).join(' • ')}</div>`:''}
+        <div class="small muted" style="margin-top:8px">${x.rec.hasIndicator?'Indikator asesmen tersedia; rekomendasi menggunakan catatan indikator dan guru.':'Indikator spesifik belum diisi. Rekomendasi ini masih bersifat awal dan perlu diverifikasi guru.'}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn btn-primary small" onclick="createRecommendedPlan('${x.student.id}')">Gunakan Rekomendasi → Rencana</button><button class="btn btn-outline small" onclick="showRecommendationDetail('${x.student.id}')">Lihat Alur N-A-R-A-S-I</button></div>
+      </div>`).join('') || `<div class="empty-state"><div class="icon">📊</div><div>Belum ada data analisis.</div></div>`}
     </div>
   `;
 }
 
+function createRecommendedPlan(studentId) {
+  const s = student(studentId);
+  const ass = db.assessments.filter(a => a.studentId === studentId && a.subject === selectedSubject);
+  if (!s || !ass.length) { toast('Belum ada nilai untuk dianalisis.', 'error'); return; }
+  const r = buildLearningRecommendation(s, ass);
+  const title = `${r.levelAction.label}: ${r.focus}`;
+  const alreadyExists = db.plans.some(p => p.studentId === studentId && p.subject === selectedSubject && p.title === title);
+  if (alreadyExists && !confirm("Murid ini sudah memiliki rencana dengan judul yang sama. Apakah Anda ingin tetap membuat catatan baru untuk siklus pendampingan berikutnya?")) return;
+  const detail = `HASIL ANALISIS: ${r.diagnosis}\nFOKUS: ${r.focus}\nRENCANA: ${r.measurablePlan}\nAKSI GURU: ${r.activity}\nSTRATEGI: ${r.strategy}\nINTERVENSI: ${r.intervention}\nJADWAL: ${r.schedule}\nINDIKATOR KEBERHASILAN: ${r.successCriteria}\nPEMANTAUAN: ${r.monitoring}`;
+  db.plans.push({id:uid('P'), studentId, subject:selectedSubject, title, text:detail, recommendation:{baseline:r.baseline,targetScore:r.targetScore,durationWeeks:r.durationWeeks,sessionsPerWeek:r.sessionsPerWeek,minutesPerSession:r.minutesPerSession,totalSessions:r.totalSessions,diagnosis:r.diagnosis,focus:r.focus,measurablePlan:r.measurablePlan,schedule:r.schedule,activity:r.activity,strategy:r.strategy,intervention:r.intervention,successCriteria:r.successCriteria,monitoring:r.monitoring}, status:'Rekomendasi NARASI'});
+  saveDB(); view='rencana'; render(); toast('Rekomendasi berhasil dimasukkan ke Rencana. Silakan tinjau dan sesuaikan.', 'success');
+}
+
+function showRecommendationDetail(studentId) {
+  const s=student(studentId); const ass=db.assessments.filter(a=>a.studentId===studentId && a.subject===selectedSubject);
+  if(!s || !ass.length) return;
+  const r=buildLearningRecommendation(s,ass);
+  modal(`Alur N-A-R-A-S-I • ${s.name}`, `<div style="display:grid;gap:10px"><div><b>N — Nilai</b><p>Rata-rata ${r.avg} dari ${ass.length} asesmen.</p></div><div><b>A — Analisis</b><p>${esc(r.diagnosis)}</p></div><div><b>R — Rencana terukur</b><p>${esc(r.measurablePlan)}</p><p><b>Jadwal:</b> ${esc(r.schedule)}</p><p><b>Indikator keberhasilan:</b> ${esc(r.successCriteria)}</p></div><div><b>A — Aksi</b><p>${esc(r.activity)}</p></div><div><b>S — Strategi</b><p>${esc(r.strategy)}</p></div><div><b>I — Intervensi</b><p>${esc(r.intervention)}</p></div></div>`, `<button class="btn btn-primary" data-close>Tutup</button>`);
+}
+
 function rencanaView() {
-  const list = db.plans.filter(p => p.subject === selectedSubject && student(p.studentId)?.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filtered = db.plans.filter(p => p.subject === selectedSubject && student(p.studentId)?.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const grouped = new Map();
+  filtered.forEach(p => {
+    const key = p.studentId || "tanpa-id";
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(p);
+  });
+  const groups = [...grouped.entries()].sort((a,b) => (student(a[0])?.name || "").localeCompare(student(b[0])?.name || "", "id"));
   return `
     <div class="page-head">
       <h2>R — Rencana Pendampingan (${selectedSubject})</h2>
@@ -866,23 +1139,50 @@ function rencanaView() {
     </div>
     ${subjectFilterHTML()}
     ${narasiFlowHeader('R')}
-    <div class="section">
-      <div class="table-wrap">
-        <table class="table">
-          <thead><tr><th>Nama Murid</th><th>Judul Rencana</th><th>Detail Pendampingan</th><th>Aksi</th></tr></thead>
-          <tbody>
-            ${list.map(p => `<tr>
-              <td><b>${esc(student(p.studentId)?.name)}</b></td>
-              <td><b>${esc(p.title)}</b></td>
-              <td>${esc(p.text)}</td>
-              <td>
-                <button class="btn btn-danger small" onclick="deletePlan('${p.id}')">Hapus</button>
-                <button class="btn btn-success small" onclick="convertPlanToAction('${p.id}')">Pindah ke AKSI ➔</button>
-              </td>
-            </tr>`).join('') || `<tr><td colspan="4"><div class="empty-state"><div class="icon">📝</div><div>Belum ada rencana pendampingan.</div></div></td></tr>`}
-          </tbody>
-        </table>
-      </div>
+    <div class="section" style="display:grid;gap:18px">
+      ${groups.map(([studentId, plans]) => {
+        const st = student(studentId);
+        return `<section class="card" style="padding:18px;border:1px solid var(--slate-300)">
+          <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--slate-300);padding-bottom:12px;margin-bottom:14px">
+            <div><div class="small muted">PESERTA DIDIK</div><h3 style="margin:4px 0">${esc(st?.name || "Murid")}</h3><div class="small muted">${esc(st?.level || "SD")} • Kelas ${esc(st?.className || "-")} • ${plans.length} rencana</div></div>
+            <span class="badge">${plans.length} catatan</span>
+          </div>
+          <div style="display:grid;gap:14px">
+            ${plans.map(p => {
+              const rec = p.recommendation || null;
+              return `<article style="padding:14px;border:1px solid var(--slate-300);border-radius:12px;background:var(--glass-bg)">
+                <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">
+                  <h3 style="margin:0;color:var(--blue)">${esc(p.title)}</h3>
+                  <span class="badge">${esc(p.status || "Rencana")}</span>
+                </div>
+                <div class="small muted" style="margin-top:4px">${esc(p.subject || selectedSubject)}</div>
+                ${rec ? `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:9px;margin:12px 0">
+                  <div style="padding:11px;border-radius:10px;background:var(--blue-light)"><div class="small muted">Nilai awal</div><b style="font-size:21px">${rec.baseline}</b></div>
+                  <div style="padding:11px;border-radius:10px;background:var(--emerald-light)"><div class="small muted">Target nilai</div><b style="font-size:21px">${rec.targetScore}</b></div>
+                  <div style="padding:11px;border-radius:10px;background:var(--amber-light)"><div class="small muted">Durasi</div><b>${rec.durationWeeks} minggu</b></div>
+                  <div style="padding:11px;border-radius:10px;background:var(--slate-100)"><div class="small muted">Jumlah sesi</div><b>${rec.totalSessions} sesi</b></div>
+                </div>
+                <div style="display:grid;gap:9px">
+                  <div><b>1. Hasil analisis</b><div class="small" style="margin-top:3px">${esc(rec.diagnosis)}</div></div>
+                  <div><b>2. Fokus kompetensi</b><div class="small" style="margin-top:3px">${esc(rec.focus)}</div></div>
+                  <div><b>3. Tujuan pendampingan terukur</b><div class="small" style="margin-top:3px">${esc(rec.measurablePlan)}</div></div>
+                  <div><b>4. Jadwal dan alokasi waktu</b><div class="small" style="margin-top:3px">${esc(rec.schedule)}</div></div>
+                  <div><b>5. Langkah kegiatan guru dan murid</b><div class="small" style="margin-top:3px">${esc(rec.activity)}</div></div>
+                  <div><b>6. Strategi pembelajaran</b><div class="small" style="margin-top:3px">${esc(rec.strategy)}</div></div>
+                  <div><b>7. Bentuk intervensi</b><div class="small" style="margin-top:3px">${esc(rec.intervention)}</div></div>
+                  <div><b>8. Indikator keberhasilan</b><div class="small" style="margin-top:3px">${esc(rec.successCriteria)}</div></div>
+                  <div><b>9. Pemantauan dan evaluasi</b><div class="small" style="margin-top:3px">${esc(rec.monitoring)}</div></div>
+                </div>` : `<div class="small" style="white-space:pre-wrap;line-height:1.65;margin-top:10px">${esc(p.text)}</div>`}
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--slate-300)">
+                  <button class="btn btn-secondary small" onclick="editNarasiRecord('plan','${p.id}')">✏️ Edit Rencana</button>
+                  <button class="btn btn-danger small" onclick="deletePlan('${p.id}')">Hapus</button>
+                  <button class="btn btn-success small" onclick="convertPlanToAction('${p.id}')">Pindah ke AKSI ➔</button>
+                </div>
+              </article>`;
+            }).join("")}
+          </div>
+        </section>`;
+      }).join("") || `<div class="empty-state"><div class="icon">📝</div><div>Belum ada rencana pendampingan.</div></div>`}
     </div>
   `;
 }
@@ -913,8 +1213,7 @@ function deletePlan(id) {
 }
 
 function quickAddPlan(studentId) {
-  db.plans.push({ id: uid("P"), studentId, subject: selectedSubject, title: "Pendampingan Khusus Konsep Dasar", text: "Latihan terbimbing sesuai kebutuhan belajar siswa.", status: "Rencana" });
-  saveDB(); view = "rencana"; render(); toast("Rencana pendampingan otomatis dibuat!", "success");
+  createRecommendedPlan(studentId);
 }
 
 function convertPlanToAction(planId) {
@@ -939,7 +1238,7 @@ function aksiView() {
               <td><b>${esc(student(a.studentId)?.name)}</b></td>
               <td><b>${esc(a.title)}</b></td>
               <td><span class="badge">${esc(a.status)}</span></td>
-              <td><button class="btn btn-primary small" onclick="quickReassess('${a.studentId}')">Lakukan Re-Asesmen (↻)</button></td>
+              <td><button class="btn btn-secondary small" onclick="editNarasiRecord('action','${a.id}')">Edit Aksi</button> <button class="btn btn-primary small" onclick="quickReassess('${a.studentId}')">Lakukan Re-Asesmen (↻)</button></td>
             </tr>`).join('') || `<tr><td colspan="4"><div class="empty-state"><div class="icon">🚀</div><div>Belum ada aksi nyata aktif.</div></div></td></tr>`}
           </tbody>
         </table>
@@ -963,8 +1262,9 @@ function strategiView() {
             <span class="badge warn">${esc(st.tier)}</span>
             <h4 style="margin:10px 0 6px">${esc(st.title)}</h4>
             <p class="muted small">${esc(st.desc)}</p>
+            ${(st.tags && st.tags.length) ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:10px">${st.tags.slice(0,5).map(tag=>`<span class="badge" style="font-size:10px;padding:3px 8px">${esc(tag)}</span>`).join("")}</div>` : ""}
           </div>
-          <button class="btn btn-danger small" style="margin-top:16px;align-self:flex-start" onclick="deleteStrategy('${st.id}')">Hapus</button>
+          <div style="display:flex;gap:6px;margin-top:16px;flex-wrap:wrap"><button class="btn btn-secondary small" onclick="editNarasiRecord('strategy','${st.id}')">✏️ Edit</button><button class="btn btn-danger small" onclick="deleteStrategy('${st.id}')">Hapus</button></div>
         </div>`).join('')}
       </div>
     </div>
@@ -974,15 +1274,22 @@ function strategiView() {
 function addStrategyModal() {
   const m = modal("Tambah Strategi Pembelajaran", `
     <div style="display:grid;gap:12px">
-      <div><label class="small font-weight:700">Kategori / Tier</label><input id="stTier" placeholder="Gamifikasi / Diferensiasi" style="width:100%;padding:10px;border-radius:8px"></div>
-      <div><label class="small font-weight:700">Judul Strategi</label><input id="stTitle" placeholder="Nama metode..." style="width:100%;padding:10px;border-radius:8px"></div>
-      <div><label class="small font-weight:700">Deskripsi & Langkah</label><textarea id="stDesc" placeholder="Penjelasan metode..." style="width:100%;padding:10px;border-radius:8px;min-height:80px"></textarea></div>
+      <div><label class="small font-weight-700">Kategori / Tier</label><input id="stTier" placeholder="Literasi / Numerasi / Kolaboratif" style="width:100%;padding:10px;border-radius:8px"></div>
+      <div><label class="small font-weight-700">Judul Strategi</label><input id="stTitle" placeholder="Nama metode..." style="width:100%;padding:10px;border-radius:8px"></div>
+      <div><label class="small font-weight-700">Deskripsi & Langkah</label><textarea id="stDesc" placeholder="Jelaskan langkah penerapan dan kebutuhan belajar yang sesuai..." style="width:100%;padding:10px;border-radius:8px;min-height:90px"></textarea></div>
+      <div><label class="small font-weight-700">Kata kunci kompetensi</label><input id="stTags" placeholder="contoh: membaca, literasi, pemahaman-bacaan" style="width:100%;padding:10px;border-radius:8px"><div class="muted small">Pisahkan dengan koma agar rekomendasi otomatis lebih tepat.</div></div>
     </div>
   `, `<button class="btn btn-primary" id="btnSaveStg">Simpan Strategi</button>`);
 
   m.querySelector("#btnSaveStg").onclick = () => {
     db.strategies = db.strategies || [];
-    db.strategies.push({ id: uid("STR"), tier: m.querySelector("#stTier").value || "Umum", title: m.querySelector("#stTitle").value, desc: m.querySelector("#stDesc").value });
+    const tier = m.querySelector("#stTier").value.trim() || "Umum";
+    const title = m.querySelector("#stTitle").value.trim();
+    const desc = m.querySelector("#stDesc").value.trim();
+    const tags = m.querySelector("#stTags").value.split(",").map(x => x.trim().toLowerCase()).filter(Boolean);
+    if (!title || !desc) { toast("Judul dan deskripsi strategi wajib diisi.", "error"); return; }
+    if (db.strategies.some(x => String(x.title).trim().toLowerCase() === title.toLowerCase())) { toast("Strategi dengan judul tersebut sudah ada.", "warn"); return; }
+    db.strategies.push({ id: uid("STR"), tier, title, desc, tags });
     saveDB(); m.remove(); render(); toast("Strategi baru berhasil ditambahkan!", "success");
   };
 }
@@ -1001,9 +1308,9 @@ function intervensiView() {
     <div class="section">
       <div class="table-wrap">
         <table class="table">
-          <thead><tr><th>Nama Murid</th><th>Bentuk Intervensi</th><th>Tanggal Pelaksanaan</th></tr></thead>
+          <thead><tr><th>Nama Murid</th><th>Bentuk Intervensi</th><th>Tanggal Pelaksanaan</th><th>Aksi</th></tr></thead>
           <tbody>
-            ${list.map(i => `<tr><td><b>${esc(student(i.studentId)?.name)}</b></td><td>${esc(i.title)}</td><td>${esc(i.date)}</td></tr>`).join('') || `<tr><td colspan="3"><div class="empty-state"><div class="icon">💡</div><div>Belum ada catatan intervensi khusus.</div></div></td></tr>`}
+            ${list.map(i => `<tr><td><b>${esc(student(i.studentId)?.name)}</b></td><td>${esc(i.title)}</td><td>${esc(i.date)}</td><td><button class="btn btn-secondary small" onclick="editNarasiRecord('intervention','${i.id}')">Edit</button></td></tr>`).join('') || `<tr><td colspan="3"><div class="empty-state"><div class="icon">💡</div><div>Belum ada catatan intervensi khusus.</div></div></td></tr>`}
           </tbody>
         </table>
       </div>
@@ -1020,7 +1327,7 @@ function reassessView() {
     <div class="section">
       <div class="table-wrap">
         <table class="table">
-          <thead><tr><th>Nama Murid</th><th>Nilai Awal</th><th>Nilai Re-Asesmen</th><th>Peningkatan (Delta)</th><th>Catatan Perkembangan</th></tr></thead>
+          <thead><tr><th>Nama Murid</th><th>Nilai Awal</th><th>Nilai Re-Asesmen</th><th>Peningkatan (Delta)</th><th>Catatan Perkembangan</th><th>Aksi</th></tr></thead>
           <tbody>
             ${list.map(r => {
               const delta = r.score - r.initialScore;
@@ -1029,7 +1336,7 @@ function reassessView() {
                 <td>${r.initialScore}</td>
                 <td><b style="color:var(--emerald)">${r.score}</b></td>
                 <td><b style="color:${delta>=0?'var(--emerald)':'var(--rose)'}">${delta>=0?'+'+delta:delta} Pt</b></td>
-                <td>${esc(r.note)}</td>
+                <td>${esc(r.note)}</td><td><button class="btn btn-secondary small" onclick="editNarasiRecord('reassess','${r.id}')">Edit</button></td>
               </tr>`;
             }).join('') || `<tr><td colspan="5"><div class="empty-state"><div class="icon">📈</div><div>Belum ada data re-asesmen untuk mapel ini.</div></div></td></tr>`}
           </tbody>
@@ -1057,6 +1364,195 @@ function quickReassess(studentId) {
   };
 }
 
+function impactView() {
+  db.impactRecords = db.impactRecords || [];
+  const list = db.impactRecords
+    .filter(x => x.subject === selectedSubject)
+    .filter(x => (student(x.studentId)?.name || "").toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+  const studentCount = new Set(list.map(x => x.studentId)).size;
+  const linkedEvidence = list.filter(x => x.evidenceUrl).length;
+  return `
+    <div class="page-head">
+      <div>
+        <h2>🏅 Bukti Dampak Nyata pada Murid</h2>
+        <div class="muted small">Dokumentasikan perubahan yang benar-benar diamati setelah proses NARASI dilaksanakan.</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-secondary" onclick="exportImpactCSV()">📥 Unduh Rekap Bukti</button>
+        <button class="btn btn-primary" onclick="addImpactRecordModal()">+ Catat Dampak Murid</button>
+      </div>
+    </div>
+    ${subjectFilterHTML()}
+    <div class="section" style="border-left:5px solid var(--blue)">
+      <h3 style="margin-top:0">Mengapa bagian ini penting?</h3>
+      <p style="line-height:1.7;margin-bottom:8px">Bagian ini membantu guru menunjukkan hubungan antara kondisi awal murid, tindakan pembelajaran yang diberikan, dan perubahan yang benar-benar terlihat.</p>
+      <p class="small muted" style="margin:0"><b>Catatan kejujuran data:</b> isi berdasarkan pelaksanaan nyata. Jangan menganggap data contoh bawaan aplikasi sebagai bukti dampak. Tautkan bukti asli yang sudah disimpan dengan aman, dan samarkan identitas murid saat dokumen dipakai untuk publikasi atau lomba.</p>
+    </div>
+    <div class="cards">
+      <div class="card"><div class="stat-label">Catatan Dampak</div><div class="stat">${list.length}</div></div>
+      <div class="card"><div class="stat-label">Murid Terdokumentasi</div><div class="stat">${studentCount}</div></div>
+      <div class="card"><div class="stat-label">Tautan Bukti Dilampirkan</div><div class="stat">${linkedEvidence}</div></div>
+    </div>
+    ${list.map(x => {
+      const st = student(x.studentId);
+      return `<div class="section">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+          <div><span class="badge">${esc(x.indicator)}</span> <span class="badge warn">${esc(x.date)}</span>
+            <h3 style="margin:10px 0 2px">${esc(st?.name || "Murid tidak ditemukan")}</h3>
+            <div class="muted small">${esc(x.subject)} · ${esc(st?.level || "SD")} · Kelas ${esc(st?.className || "-")}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-secondary small" onclick="editNarasiRecord('impact','${x.id}')">✏️ Edit Bukti Dukung</button><button class="btn btn-danger small" onclick="deleteImpactRecord('${x.id}')">Hapus Catatan</button></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:16px">
+          <div style="background:var(--blue-light);padding:14px;border-radius:12px"><b class="small">KONDISI AWAL</b><p style="margin:7px 0 0;line-height:1.6;font-size:13px">${esc(x.baseline)}</p></div>
+          <div style="background:var(--amber-light);padding:14px;border-radius:12px"><b class="small">TINDAKAN GURU</b><p style="margin:7px 0 0;line-height:1.6;font-size:13px">${esc(x.action)}</p></div>
+          <div style="background:var(--emerald-light);padding:14px;border-radius:12px"><b class="small">PERUBAHAN YANG DIAMATI</b><p style="margin:7px 0 0;line-height:1.6;font-size:13px">${esc(x.observedChange)}</p></div>
+        </div>
+        ${x.studentVoice ? `<p style="margin:14px 0 4px;font-size:13px"><b>Suara murid:</b> “${esc(x.studentVoice)}”</p>` : ""}
+        ${x.nextStep ? `<p style="margin:8px 0 4px;font-size:13px"><b>Tindak lanjut berikutnya:</b> ${esc(x.nextStep)}</p>` : ""}
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--slate-300);font-size:12px">
+          <b>Bukti pendukung:</b> ${esc(x.evidenceDescription || "Deskripsi bukti belum diisi.")}
+          ${x.evidenceUrl ? `<div style="margin-top:6px"><a href="${esc(x.evidenceUrl)}" target="_blank" rel="noopener noreferrer" style="color:var(--blue);font-weight:700">🔗 Buka bukti pendukung</a></div>` : `<div class="muted" style="margin-top:5px">Belum ada tautan bukti. Simpan bukti asli secara aman dan tambahkan tautannya bila tersedia.</div>`}
+        </div>
+      </div>`;
+    }).join("") || `<div class="section"><div class="empty-state"><div class="icon">📌</div><div><b>Belum ada catatan dampak untuk ${esc(selectedSubject)}.</b></div><p class="small muted">Mulai dengan mencatat satu murid, kondisi awalnya, tindakan yang dilakukan, perubahan yang diamati, dan bukti pendukung.</p></div></div>`}
+  `;
+}
+
+function addImpactRecordModal() {
+  db.impactRecords = db.impactRecords || [];
+  const studentOptions = db.students.map(st => `<option value="${esc(st.id)}">${esc(st.name)} — ${esc(st.level || "SD")} Kelas ${esc(st.className)}</option>`).join("");
+  const subjectOptions = getSubjectsList().map(sub => `<option value="${esc(sub)}" ${sub === selectedSubject ? "selected" : ""}>${esc(sub)}</option>`).join("");
+  const m = modal("Catat Bukti Dampak Murid", `
+    <div style="display:grid;gap:12px">
+      <div><label class="small">Nama Murid</label><select id="imStudent" style="width:100%;padding:10px;border:1px solid var(--slate-300);border-radius:8px">${studentOptions}</select></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label class="small">Mata Pelajaran</label><select id="imSubject" style="width:100%;padding:10px;border:1px solid var(--slate-300);border-radius:8px">${subjectOptions}</select></div>
+        <div><label class="small">Tanggal Pengamatan</label><input id="imDate" type="date" value="${new Date().toISOString().slice(0,10)}" style="width:100%;padding:10px;border:1px solid var(--slate-300);border-radius:8px"></div>
+      </div>
+      <div><label class="small">Aspek Perkembangan</label><select id="imIndicator" style="width:100%;padding:10px;border:1px solid var(--slate-300);border-radius:8px"><option>Pemahaman konsep</option><option>Keterampilan membaca/menulis</option><option>Kemandirian belajar</option><option>Partisipasi dan keaktifan</option><option>Kepercayaan diri</option><option>Keterampilan pemecahan masalah</option><option>Sikap dan karakter</option><option>Hasil karya</option></select></div>
+      <div><label class="small">1. Kondisi Awal / Kesulitan Murid</label><textarea id="imBaseline" placeholder="Tuliskan berdasarkan hasil asesmen atau pengamatan awal. Contoh: murid belum dapat menentukan ide pokok secara mandiri." style="width:100%;padding:10px;border:1px solid var(--slate-300);border-radius:8px;min-height:75px"></textarea></div>
+      <div><label class="small">2. Tindakan Nyata Guru melalui NARASI</label><textarea id="imAction" placeholder="Tuliskan strategi, pendampingan, media, atau intervensi yang benar-benar dilakukan." style="width:100%;padding:10px;border:1px solid var(--slate-300);border-radius:8px;min-height:75px"></textarea></div>
+      <div><label class="small">3. Perubahan yang Benar-Benar Diamati</label><textarea id="imChange" placeholder="Jelaskan perilaku atau kemampuan yang berubah. Sertakan contoh konkret, bukan hanya kata 'meningkat'." style="width:100%;padding:10px;border:1px solid var(--slate-300);border-radius:8px;min-height:85px"></textarea></div>
+      <div><label class="small">Suara / Tanggapan Murid (opsional)</label><textarea id="imVoice" placeholder="Catat pernyataan murid secara apa adanya, bila ada." style="width:100%;padding:10px;border:1px solid var(--slate-300);border-radius:8px;min-height:60px"></textarea></div>
+      <div><label class="small">4. Bukti Pendukung</label><input id="imEvidenceDesc" placeholder="Misalnya: lembar kerja sebelum-sesudah, hasil asesmen, foto kegiatan, jurnal observasi." style="width:100%;padding:10px;border:1px solid var(--slate-300);border-radius:8px"></div>
+      <div><label class="small">Tautan Bukti (opsional, misalnya Google Drive)</label><input id="imEvidenceUrl" type="url" placeholder="https://drive.google.com/..." style="width:100%;padding:10px;border:1px solid var(--slate-300);border-radius:8px"></div>
+      <div><label class="small">5. Tindak Lanjut Berikutnya (opsional)</label><textarea id="imNext" placeholder="Apa langkah berikutnya agar perkembangan murid berkelanjutan?" style="width:100%;padding:10px;border:1px solid var(--slate-300);border-radius:8px;min-height:60px"></textarea></div>
+    </div>
+  `, `<button class="btn btn-primary" id="btnSaveImpact">Simpan Bukti Dampak</button>`);
+
+  m.querySelector("#btnSaveImpact").onclick = () => {
+    const baseline = m.querySelector("#imBaseline").value.trim();
+    const action = m.querySelector("#imAction").value.trim();
+    const observedChange = m.querySelector("#imChange").value.trim();
+    const evidenceDescription = m.querySelector("#imEvidenceDesc").value.trim();
+    const evidenceUrl = m.querySelector("#imEvidenceUrl").value.trim();
+    const impactSubject = m.querySelector("#imSubject").value;
+    const impactDate = m.querySelector("#imDate").value;
+    if (!m.querySelector("#imStudent").value || !impactDate || !baseline || !action || !observedChange || !evidenceDescription) {
+      toast("Lengkapi murid, kondisi awal, tindakan, perubahan, dan deskripsi bukti.", "error"); return;
+    }
+    if (evidenceUrl && !/^https?:\/\//i.test(evidenceUrl)) {
+      toast("Tautan bukti harus diawali http:// atau https://.", "error"); return;
+    }
+    db.impactRecords.push({
+      id: uid("IMP"), studentId: m.querySelector("#imStudent").value,
+      subject: impactSubject, date: impactDate,
+      indicator: m.querySelector("#imIndicator").value, baseline, action, observedChange,
+      studentVoice: m.querySelector("#imVoice").value.trim(), evidenceDescription, evidenceUrl,
+      nextStep: m.querySelector("#imNext").value.trim()
+    });
+    saveDB(); m.remove();
+    selectedSubject = impactSubject;
+    localStorage.setItem("NARASI_SUBJECT", selectedSubject);
+    view = "impact"; render(); toast("Bukti dampak murid berhasil disimpan.", "success");
+  };
+}
+
+
+function editNarasiRecord(type, id) {
+  const collections = {
+    student: db.students, assessment: db.assessments, plan: db.plans, action: db.actions,
+    strategy: db.strategies || [], intervention: db.interventions || [], reassess: db.reassessments,
+    impact: db.impactRecords || [], reflection: db.reflections || [], material: db.materials, task: db.tasks
+  };
+  const record = (collections[type] || []).find(x => x.id === id);
+  if (!record) { toast("Data yang akan diedit tidak ditemukan.", "error"); return; }
+  const definitions = {
+    student: [['id','ID Murid','text'],['name','Nama Lengkap','text'],['level','Jenjang','select',['SD','SMP','SMA']],['className','Kelas','text'],['pin','PIN Portal','text']],
+    assessment: [['studentId','ID Murid','text'],['subject','Mata Pelajaran','text'],['type','Jenis Asesmen','select',['Diagnostik','Formatif','Sumatif']],['score','Nilai (0–100)','number'],['date','Tanggal','date'],['skill','Kompetensi / Indikator','textarea'],['note','Catatan Guru','textarea']],
+    plan: [['studentId','ID Murid','text'],['subject','Mata Pelajaran','text'],['title','Judul Rencana','text'],['text','Rencana Pendampingan / Detail','textarea'],['status','Status','text']],
+    action: [['title','Judul Aksi','text'],['text','Uraian Aksi','textarea'],['status','Status Pelaksanaan','text']],
+    strategy: [['tier','Kategori / Jenjang','text'],['title','Nama Strategi','text'],['desc','Deskripsi dan Langkah','textarea']],
+    intervention: [['studentId','ID Murid','text'],['subject','Mata Pelajaran','text'],['title','Bentuk Intervensi','textarea'],['date','Tanggal Pelaksanaan','date']],
+    reassess: [['initialScore','Nilai Awal','number'],['score','Nilai Re-Asesmen','number'],['date','Tanggal','date'],['note','Catatan Perkembangan','textarea']],
+    impact: [['studentId','ID Murid','text'],['subject','Mata Pelajaran','text'],['date','Tanggal Pengamatan','date'],['indicator','Aspek Perkembangan','text'],['baseline','Kondisi Awal / Kesulitan','textarea'],['action','Tindakan Nyata Guru','textarea'],['observedChange','Perubahan yang Diamati','textarea'],['studentVoice','Suara / Tanggapan Murid','textarea'],['evidenceDescription','Deskripsi Bukti Dukung','textarea'],['evidenceUrl','Tautan Bukti Dukung','url'],['nextStep','Tindak Lanjut Berikutnya','textarea']],
+    reflection: [['date','Tanggal','date'],['note','Catatan Refleksi','textarea']],
+    material: [['title','Judul Materi','text'],['subject','Mata Pelajaran','text'],['type','Tipe Media','text'],['url','Tautan Materi','url'],['description','Deskripsi Ringkas','textarea']],
+    task: [['title','Judul Tugas','text'],['subject','Mata Pelajaran','text'],['due','Batas Pengumpulan','date'],['description','Instruksi Pengerjaan','textarea']]
+  };
+  const fields = definitions[type] || [];
+  const fieldHtml = fields.map(([key,label,kind,opts]) => {
+    const value = record[key] ?? '';
+    let control;
+    if (kind === 'select') control = `<select data-edit-key="${key}" style="width:100%;padding:10px;border:1px solid var(--slate-300);border-radius:8px">${opts.map(v=>`<option value="${esc(v)}" ${String(value)===v?'selected':''}>${esc(v)}</option>`).join('')}</select>`;
+    else if (kind === 'textarea') control = `<textarea data-edit-key="${key}" style="width:100%;padding:10px;border:1px solid var(--slate-300);border-radius:8px;min-height:76px">${esc(value)}</textarea>`;
+    else control = `<input data-edit-key="${key}" type="${kind}" value="${esc(value)}" ${kind==='number'?'min="0" max="100"':''} style="width:100%;padding:10px;border:1px solid var(--slate-300);border-radius:8px">`;
+    return `<div><label class="small" style="display:block;margin-bottom:5px">${label}</label>${control}</div>`;
+  }).join('');
+  const titles = {student:'Edit Data Murid',assessment:'Edit Nilai Asesmen',plan:'Edit Rencana Pendampingan',action:'Edit Aksi Nyata',strategy:'Edit Strategi Pembelajaran',intervention:'Edit Intervensi',reassess:'Edit Hasil Re-Asesmen',impact:'Edit Bukti Dukung dan Dampak Murid',reflection:'Edit Jurnal Refleksi',material:'Edit Materi Belajar',task:'Edit Tugas'};
+  const m = modal(titles[type] || 'Edit Data', `<div style="display:grid;gap:12px">${fieldHtml}</div>`, `<button class="btn btn-danger" id="btnDeleteNarasi" type="button">🗑️ Hapus</button> <button class="btn btn-primary" id="btnUpdateNarasi">Simpan Perubahan</button>`);
+  m.querySelector('#btnDeleteNarasi').onclick = () => {
+    const labels = {student:'data murid',assessment:'nilai asesmen',plan:'rencana pendampingan',action:'aksi nyata',strategy:'strategi pembelajaran',intervention:'catatan intervensi',reassess:'hasil re-asesmen',impact:'bukti dampak murid',reflection:'jurnal refleksi',material:'materi belajar',task:'tugas'};
+    if (!confirm(`Yakin ingin menghapus ${labels[type] || 'data'} ini? Tindakan ini tidak dapat dibatalkan. Sebaiknya unduh cadangan terlebih dahulu.`)) return;
+    const collection = collections[type];
+    if (!Array.isArray(collection)) { toast('Data tidak dapat dihapus.', 'error'); return; }
+    const index = collection.findIndex(x => x.id === id);
+    if (index < 0) { toast('Data tidak ditemukan.', 'error'); return; }
+    collection.splice(index, 1);
+    saveDB(); m.remove(); render(); toast(`${labels[type] || 'Data'} berhasil dihapus.`, 'warn');
+  };
+  m.querySelector('#btnUpdateNarasi').onclick = () => {
+    const edits = [...m.querySelectorAll('[data-edit-key]')];
+    for (const el of edits) {
+      const key = el.dataset.editKey;
+      let value = el.value.trim();
+      if (el.type === 'number') value = Number(value);
+      if (key === 'score' && (value < 0 || value > 100 || !Number.isFinite(value))) { toast('Nilai harus berada pada rentang 0–100.', 'error'); return; }
+      if (key === 'initialScore' && (value < 0 || value > 100 || !Number.isFinite(value))) { toast('Nilai awal harus berada pada rentang 0–100.', 'error'); return; }
+      if (key === 'evidenceUrl' && value && !/^https?:\/\//i.test(value)) { toast('Tautan bukti harus diawali http:// atau https://.', 'error'); return; }
+      record[key] = value;
+    }
+    saveDB(); m.remove(); render(); toast('Perubahan berhasil disimpan.', 'success');
+  };
+}
+
+function deleteImpactRecord(id) {
+  if (!confirm("Hapus catatan bukti dampak ini?")) return;
+  db.impactRecords = (db.impactRecords || []).filter(x => x.id !== id);
+  saveDB(); render(); toast("Catatan bukti dampak dihapus.", "warn");
+}
+
+function exportImpactCSV() {
+  const rows = [["Tanggal", "ID Murid", "Nama Murid", "Jenjang", "Kelas", "Mata Pelajaran", "Aspek Perkembangan", "Kondisi Awal", "Tindakan Guru", "Perubahan Diamati", "Suara Murid", "Deskripsi Bukti", "Tautan Bukti", "Tindak Lanjut"]];
+  const safe = value => {
+    let v = String(value ?? "");
+    if (/^[=+@\-]/.test(v)) v = "'" + v;
+    return '"' + v.replace(/"/g, '""') + '"';
+  };
+  (db.impactRecords || []).filter(x => x.subject === selectedSubject).forEach(x => {
+    const st = student(x.studentId) || {};
+    rows.push([x.date, x.studentId, st.name, st.level || "SD", st.className, x.subject, x.indicator, x.baseline, x.action, x.observedChange, x.studentVoice, x.evidenceDescription, x.evidenceUrl, x.nextStep]);
+  });
+  const csv = "\uFEFF" + rows.map(row => row.map(safe).join(",")).join("\r\n");
+  const blob = new Blob([csv], {type:"text/csv;charset=utf-8;"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = `BUKTI_DAMPAK_NARASI_${selectedSubject.toUpperCase().replace(/\s+/g,"_")}.csv`;
+  a.click(); URL.revokeObjectURL(a.href);
+  toast("Rekap bukti dampak berhasil diunduh.", "success");
+}
+
 function studentsMgmtView() {
   const list = db.students.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
   return `
@@ -1068,14 +1564,15 @@ function studentsMgmtView() {
     <div class="section">
       <div class="table-wrap">
         <table class="table">
-          <thead><tr><th>ID</th><th>Nama Lengkap</th><th>Kelas</th><th>PIN Portal</th><th>Aksi</th></tr></thead>
+          <thead><tr><th>ID</th><th>Nama Lengkap</th><th>Jenjang</th><th>Kelas</th><th>PIN Portal</th><th>Aksi</th></tr></thead>
           <tbody>
             ${list.map(s => `<tr>
               <td><b>${s.id}</b></td>
               <td><b>${esc(s.name)}</b></td>
+              <td><span class="badge">${esc(s.level || "SD")}</span></td>
               <td>${esc(s.className)}</td>
               <td><code>${esc(s.pin)}</code></td>
-              <td><button class="btn btn-danger small" onclick="deleteStudent('${s.id}')">Hapus</button></td>
+              <td><button class="btn btn-secondary small" onclick="editNarasiRecord('student','${s.id}')">Edit</button> <button class="btn btn-danger small" onclick="deleteStudent('${s.id}')">Hapus</button></td>
             </tr>`).join('')}
           </tbody>
         </table>
@@ -1088,8 +1585,9 @@ function addStudentModal() {
   const m = modal("Tambah Peserta Didik", `
     <div style="display:grid;gap:12px">
       <div><label class="small font-weight:700">ID Murid</label><input id="stId" placeholder="M004" style="width:100%;padding:10px;border-radius:8px"></div>
-      <div><label class="small font-weight:700">Nama Lengkap</label><input id="stName" placeholder="Nama lengkap anak..." style="width:100%;padding:10px;border-radius:8px"></div>
-      <div><label class="small font-weight:700">Kelas</label><input id="stClass" value="V" style="width:100%;padding:10px;border-radius:8px"></div>
+      <div><label class="small font-weight:700">Nama Lengkap</label><input id="stName" placeholder="Nama lengkap peserta didik..." style="width:100%;padding:10px;border-radius:8px"></div>
+      <div><label class="small font-weight:700">Jenjang Pendidikan</label><select id="stLevel" style="width:100%;padding:10px;border-radius:8px"><option value="SD">SD / MI</option><option value="SMP">SMP / MTs</option><option value="SMA">SMA / MA / SMK</option></select></div>
+      <div><label class="small font-weight:700">Kelas</label><input id="stClass" value="V" placeholder="Contoh: V, VII, X, XI IPA" style="width:100%;padding:10px;border-radius:8px"><small class="muted">Isi tingkat/rombongan belajar sesuai jenjang yang dipilih.</small></div>
       <div><label class="small font-weight:700">PIN Portal Murid</label><input id="stPin" value="1234" style="width:100%;padding:10px;border-radius:8px"></div>
     </div>
   `, `<button class="btn btn-primary" id="btnSaveSt">Simpan Murid</button>`);
@@ -1098,7 +1596,7 @@ function addStudentModal() {
     const id = m.querySelector("#stId").value.trim().toUpperCase();
     const name = m.querySelector("#stName").value.trim();
     if (!id || !name) { toast("ID dan Nama murid wajib diisi!", "error"); return; }
-    db.students.push({ id, name, className: m.querySelector("#stClass").value, pin: m.querySelector("#stPin").value, status: "Aktif", avatar: null });
+    db.students.push({ id, name, level: m.querySelector("#stLevel").value, className: m.querySelector("#stClass").value.trim(), pin: m.querySelector("#stPin").value, status: "Aktif", avatar: null });
     saveDB(); m.remove(); render(); toast("Peserta didik berhasil ditambahkan!", "success");
   };
 }
@@ -1120,6 +1618,7 @@ function reflectionView() {
       <div style="display:grid;gap:16px">
         ${(db.reflections || []).map(r => `<div style="background:var(--glass-bg);border-radius:14px;padding:18px;border:1px solid var(--glass-border)">
           <span class="badge warn">${esc(r.date)}</span>
+          <div style="display:flex;gap:6px;justify-content:flex-end"><button class="btn btn-secondary small" onclick="editNarasiRecord('reflection','${r.id}')">✏️ Edit Refleksi</button></div>
           <p style="margin:10px 0 0;font-size:13.5px;line-height:1.6">${esc(r.note)}</p>
         </div>`).join('') || '<div class="empty-state"><div class="icon">📔</div><div>Belum ada catatan jurnal refleksi.</div></div>'}
       </div>
@@ -1157,7 +1656,7 @@ function materialsMgmtView() {
         <table class="table">
           <thead><tr><th>Judul Materi</th><th>Tipe</th><th>Tautan</th><th>Aksi</th></tr></thead>
           <tbody>
-            ${list.map(m => `<tr><td><b>${esc(m.title)}</b></td><td><span class="badge">${esc(m.type)}</span></td><td>${m.url?`<a href="${esc(m.url)}" target="_blank" style="color:var(--blue)">Buka Tautan</a>`:'-'}</td><td><button class="btn btn-danger small" onclick="deleteMaterial('${m.id}')">Hapus</button></td></tr>`).join('') || `<tr><td colspan="4"><div class="empty-state"><div class="icon">📂</div><div>Belum ada materi diterbitkan.</div></div></td></tr>`}
+            ${list.map(m => `<tr><td><b>${esc(m.title)}</b></td><td><span class="badge">${esc(m.type)}</span></td><td>${m.url?`<a href="${esc(m.url)}" target="_blank" style="color:var(--blue)">Buka Tautan</a>`:'-'}</td><td><button class="btn btn-secondary small" onclick="editNarasiRecord('material','${m.id}')">Edit</button> <button class="btn btn-danger small" onclick="deleteMaterial('${m.id}')">Hapus</button></td></tr>`).join('') || `<tr><td colspan="4"><div class="empty-state"><div class="icon">📂</div><div>Belum ada materi diterbitkan.</div></div></td></tr>`}
           </tbody>
         </table>
       </div>
@@ -1199,7 +1698,7 @@ function tasksMgmtView() {
         <table class="table">
           <thead><tr><th>Judul Tugas</th><th>Batas Pengumpulan</th><th>Terkumpul</th><th>Aksi</th></tr></thead>
           <tbody>
-            ${list.map(t => `<tr><td><b>${esc(t.title)}</b></td><td>${esc(t.due)}</td><td><span class="badge">${(t.submissions||[]).length} Murid</span></td><td><button class="btn btn-danger small" onclick="deleteTask('${t.id}')">Hapus</button></td></tr>`).join('') || `<tr><td colspan="4"><div class="empty-state"><div class="icon">📋</div><div>Belum ada tugas dibuat.</div></div></td></tr>`}
+            ${list.map(t => `<tr><td><b>${esc(t.title)}</b></td><td>${esc(t.due)}</td><td><span class="badge">${(t.submissions||[]).length} Murid</span></td><td><button class="btn btn-secondary small" onclick="editNarasiRecord('task','${t.id}')">Edit</button> <button class="btn btn-danger small" onclick="deleteTask('${t.id}')">Hapus</button></td></tr>`).join('') || `<tr><td colspan="4"><div class="empty-state"><div class="icon">📋</div><div>Belum ada tugas dibuat.</div></div></td></tr>`}
           </tbody>
         </table>
       </div>
@@ -1267,7 +1766,7 @@ function studentHomeView() {
   const s = currentStudent();
   return `<div class="section" style="background:linear-gradient(135deg, var(--blue-dark), var(--blue));color:#fff">
     <h2 style="margin-top:0">Halo, ${esc(s.name)}! 👋</h2>
-    <p style="margin:0">Selamat datang di Portal Murid NARASI Pro. Kelas: <b>${esc(s.className)}</b> | ID: <b>${esc(s.id)}</b></p>
+    <p style="margin:0">Selamat datang di Portal Murid NARASI Pro. Jenjang: <b>${esc(s.level || "SD")}</b> | Kelas: <b>${esc(s.className)}</b> | ID: <b>${esc(s.id)}</b></p>
   </div>`;
 }
 
@@ -1348,7 +1847,8 @@ function studentAssessmentsView() {
         <table class="table">
           <thead><tr><th>Mata Pelajaran</th><th>Jenis Asesmen</th><th>Nilai</th><th>Catatan Guru</th></tr></thead>
           <tbody>
-            ${ass.map(a => `<tr><td>${esc(a.subject)}</td><td>${esc(a.type)}</td><td><b>${a.score}</b></td><td>${esc(a.note)}</td></tr>`).join('') || '<tr><td colspan="4"><div class="empty-state">Belum ada rekapitulasi nilai.</div></td></tr>'}
+            ${ass.map(a => `<tr><td>${esc(a.subject)}</td><td>${esc(a.type)}</td><td><b>${a.score}</b></td><td>${esc(a.note)}</td>
+              <td><button class="btn btn-secondary small" onclick="editNarasiRecord('assessment','${a.id}')">Edit</button></td></tr>`).join('') || '<tr><td colspan="4"><div class="empty-state">Belum ada rekapitulasi nilai.</div></td></tr>'}
           </tbody>
         </table>
       </div>
@@ -1366,9 +1866,15 @@ function studentProgressView() {
         <table class="table">
           <thead><tr><th>Mata Pelajaran</th><th>Nilai Awal</th><th>Nilai Re-Asesmen</th><th>Peningkatan</th><th>Catatan</th></tr></thead>
           <tbody>
-            ${db.reassessments.filter(r => r.studentId === s.id).map(r => `<tr><td>${esc(r.subject)}</td><td>${r.initialScore}</td><td><b>${r.score}</b></td><td><b style="color:var(--emerald)">+${r.score - r.initialScore} Pt</b></td><td>${esc(r.note)}</td></tr>`).join('') || '<tr><td colspan="5"><div class="empty-state">Belum ada catatan re-asesmen.</div></td></tr>'}
+            ${db.reassessments.filter(r => r.studentId === s.id).map(r => `<tr><td>${esc(r.subject)}</td><td>${r.initialScore}</td><td><b>${r.score}</b></td><td><b style="color:var(--emerald)">+${r.score - r.initialScore} Pt</b></td><td>${esc(r.note)}</td><td><button class="btn btn-secondary small" onclick="editNarasiRecord('reassess','${r.id}')">Edit</button></td></tr>`).join('') || '<tr><td colspan="5"><div class="empty-state">Belum ada catatan re-asesmen.</div></td></tr>'}
           </tbody>
         </table>
+      </div>
+    </div>
+    <div class="section">
+      <h3>Catatan Perkembangan dari Guru</h3>
+      <div style="display:grid;gap:12px">
+        ${(db.impactRecords || []).filter(x => x.studentId === s.id).sort((a,b) => String(b.date || "").localeCompare(String(a.date || ""))).map(x => `<div style="padding:14px;border-radius:12px;background:var(--emerald-light)"><span class="badge">${esc(x.subject)}</span> <span class="small muted">${esc(x.date)}</span><h4 style="margin:8px 0 4px">${esc(x.indicator)}</h4><p style="margin:0;line-height:1.6;font-size:13px">${esc(x.observedChange)}</p>${x.nextStep ? `<p class="small" style="margin:8px 0 0"><b>Langkah berikutnya:</b> ${esc(x.nextStep)}</p>` : ""}</div>`).join("") || '<div class="empty-state"><div class="icon">🌱</div><div>Belum ada catatan perkembangan dari guru.</div></div>'}
       </div>
     </div>
   `;
