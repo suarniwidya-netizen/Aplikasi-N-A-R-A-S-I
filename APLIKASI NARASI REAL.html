@@ -407,7 +407,73 @@ function loadDB() {
     return data;
   } catch (e) { return JSON.parse(JSON.stringify(seed)); }
 }
-function saveDB() { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+// Snapshot untuk mencegah perubahan data selain aktivitas murid yang memang diizinkan.
+let lastPersistedDB = JSON.stringify(db);
+
+function studentMutationIsAllowed(previous, next) {
+  if (role !== "murid" || !currentStudentId) return false;
+  const before = JSON.parse(previous);
+  const after = JSON.parse(JSON.stringify(next));
+  const beforeMaterials = before.materials || [];
+  const afterMaterials = after.materials || [];
+  const beforeTasks = before.tasks || [];
+  const afterTasks = after.tasks || [];
+
+  // Data inti selain status baca materi dan jawaban tugas harus tetap identik.
+  const stripAllowed = data => {
+    const copy = JSON.parse(JSON.stringify(data));
+    copy.materials = (copy.materials || []).map(({doneBy, ...rest}) => rest);
+    copy.tasks = (copy.tasks || []).map(({submissions, ...rest}) => rest);
+    return copy;
+  };
+  if (JSON.stringify(stripAllowed(before)) !== JSON.stringify(stripAllowed(after))) return false;
+
+  // Murid hanya boleh menandai materi miliknya selesai satu kali.
+  for (const oldMat of beforeMaterials) {
+    const newMat = afterMaterials.find(x => x.id === oldMat.id);
+    if (!newMat) return false;
+    const oldDone = oldMat.doneBy || {};
+    const newDone = newMat.doneBy || {};
+    for (const [studentId, value] of Object.entries(oldDone)) {
+      if (newDone[studentId] !== value) return false;
+    }
+    for (const [studentId, value] of Object.entries(newDone)) {
+      if (studentId !== currentStudentId && oldDone[studentId] !== value) return false;
+      if (studentId === currentStudentId && value !== true) return false;
+    }
+  }
+
+  // Murid hanya boleh menambahkan satu jawaban baru miliknya; tidak boleh mengubah/menghapus jawaban lama.
+  let newSubmissionCount = 0;
+  for (const oldTask of beforeTasks) {
+    const newTask = afterTasks.find(x => x.id === oldTask.id);
+    if (!newTask) return false;
+    const oldSubs = oldTask.submissions || [];
+    const newSubs = newTask.submissions || [];
+    if (newSubs.length < oldSubs.length || newSubs.length > oldSubs.length + 1) return false;
+    if (JSON.stringify(newSubs.slice(0, oldSubs.length)) !== JSON.stringify(oldSubs)) return false;
+    const added = newSubs.slice(oldSubs.length);
+    for (const sub of added) {
+      if (sub.studentId !== currentStudentId || !String(sub.answer || '').trim() || !sub.date) return false;
+      if (oldSubs.some(x => x.studentId === currentStudentId)) return false;
+      newSubmissionCount++;
+    }
+  }
+  return newSubmissionCount <= 1;
+}
+
+function saveDB() {
+  if (role === "murid" && !studentMutationIsAllowed(lastPersistedDB, db)) {
+    db = JSON.parse(lastPersistedDB);
+    toast("TERKUNCI: murid tidak diizinkan mengubah data, nilai, profil, atau catatan guru.", "error");
+    if (document.getElementById("main")) render();
+    return false;
+  }
+  const serialized = JSON.stringify(db);
+  localStorage.setItem(DB_KEY, serialized);
+  lastPersistedDB = serialized;
+  return true;
+}
 function uid(p) { return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 function esc(v) { return String(v??"").replace(/[&<>"']/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m])); }
 function student(id) { return db.students.find(s => s.id === id); }
@@ -731,6 +797,7 @@ Data murid dan nilai yang sedang ada akan diganti dengan data dari backup. Sebel
 }
 
 function editTeacherProfileModal() {
+  if (role !== "guru") { toast("Akses ditolak. Profil guru hanya dapat dikelola guru.", "error"); return; }
   const t = db.teacher;
   const m = modal("⚙️ Edit Profil Guru & Sekolah", `
     <div style="display:grid;gap:12px">
@@ -871,12 +938,29 @@ function buildNav() {
 }
 
 function handleNavClick(targetView) {
-  if (targetView === "profile") { editTeacherProfileModal(); return; }
+  const allowedViews = role === "guru" ? teacherNav.map(x => x[0]) : studentNav.map(x => x[0]);
+  if (!allowedViews.includes(targetView)) {
+    toast("Akses ditolak. Menu tersebut hanya dapat digunakan oleh guru.", "error"); return;
+  }
+  if (role === "murid" && !currentStudent()) {
+    role = null; localStorage.removeItem(SESSION_KEY); openPortalChooser();
+    toast("Sesi murid tidak valid. Silakan masuk kembali.", "error"); return;
+  }
+  if (targetView === "profile" && role === "guru") { editTeacherProfileModal(); return; }
   view = targetView; searchQuery = ""; render();
 }
 
 function render() {
   if (!role) return;
+  if (role !== "guru" && role !== "murid") {
+    role = null; localStorage.removeItem(SESSION_KEY); openPortalChooser(); return;
+  }
+  if (role === "murid" && !currentStudent()) {
+    role = null; localStorage.removeItem(SESSION_KEY); localStorage.removeItem(STUDENT_SESSION_KEY);
+    openPortalChooser(); return;
+  }
+  const allowedViews = role === "guru" ? teacherNav.map(x => x[0]) : studentNav.map(x => x[0]);
+  if (!allowedViews.includes(view)) view = "home";
   buildNav();
   const pages = role === "guru" ? {
     home: teacherHomeView, nilai: nilaiView, analisis: analisisView,
@@ -1472,6 +1556,9 @@ function addImpactRecordModal() {
 
 
 function editNarasiRecord(type, id) {
+  if (role !== "guru") {
+    toast("Akses ditolak. Perubahan data dan nilai hanya dapat dilakukan melalui Portal Guru.", "error"); return;
+  }
   const collections = {
     student: db.students, assessment: db.assessments, plan: db.plans, action: db.actions,
     strategy: db.strategies || [], intervention: db.interventions || [], reassess: db.reassessments,
@@ -1766,7 +1853,7 @@ function studentHomeView() {
   const s = currentStudent();
   return `<div class="section" style="background:linear-gradient(135deg, var(--blue-dark), var(--blue));color:#fff">
     <h2 style="margin-top:0">Halo, ${esc(s.name)}! 👋</h2>
-    <p style="margin:0">Selamat datang di Portal Murid NARASI Pro. Jenjang: <b>${esc(s.level || "SD")}</b> | Kelas: <b>${esc(s.className)}</b> | ID: <b>${esc(s.id)}</b></p>
+    <p style="margin:0">Selamat datang di Portal Murid NARASI Pro. Data pribadi, nilai, dan catatan guru bersifat terkunci. Murid hanya dapat mengirim jawaban tugas satu kali. Jenjang: <b>${esc(s.level || "SD")}</b> | Kelas: <b>${esc(s.className)}</b> | ID: <b>${esc(s.id)}</b></p>
   </div>`;
 }
 
@@ -1789,11 +1876,13 @@ function studentMaterialsView() {
 }
 
 function toggleMat(id) {
-  const s = currentStudent();
-  const m = db.materials.find(x => x.id === id);
+  if (role !== "murid" || !currentStudent()) { toast("Akses ditolak.", "error"); return; }
+  const s = currentStudent(), m = db.materials.find(x => x.id === id);
+  if (!m) { toast("Materi tidak ditemukan.", "error"); return; }
   m.doneBy = m.doneBy || {};
-  if (m.doneBy[s.id]) delete m.doneBy[s.id]; else m.doneBy[s.id] = true;
-  saveDB(); render(); toast("Status materi diperbarui!", "success");
+  if (m.doneBy[s.id]) { toast("Materi ini sudah ditandai selesai dan tidak dapat diubah kembali.", "warn"); return; }
+  m.doneBy[s.id] = true;
+  saveDB(); render(); toast("Materi ditandai selesai.", "success");
 }
 
 function studentTasksView() {
@@ -1809,8 +1898,8 @@ function studentTasksView() {
             <h3 style="margin:6px 0">${esc(t.title)}</h3>
             <p class="muted small" style="margin:0 0 10px">${esc(t.description)}</p>
             <div class="small muted" style="margin-bottom:10px">📅 Batas Waktu: <b>${esc(t.due)}</b></div>
-            ${sub?`<div style="background:var(--emerald-light);padding:10px;border-radius:8px;margin:10px 0;font-size:12.5px"><b>Jawaban Terkirim:</b> ${esc(sub.answer)} <div class="small muted">Waktu: ${sub.date}</div></div>`:''}
-            <button class="btn btn-primary small" onclick="submitTask('${t.id}')">${sub?'Perbarui Jawaban':'Kirim Jawaban Tugas'}</button>
+            ${sub?`<div style="background:var(--emerald-light);padding:10px;border-radius:8px;margin:10px 0;font-size:12.5px"><b>Jawaban Terkirim (terkunci):</b> ${esc(sub.answer)} <div class="small muted">Waktu: ${esc(sub.date)}</div><div class="small" style="margin-top:6px;color:var(--emerald)">✓ Jawaban sudah dikirim dan tidak dapat diubah.</div></div>`:''}
+            ${sub ? '<button class="btn btn-success small" disabled>✓ Sudah Dikumpulkan</button>' : `<button class="btn btn-primary small" onclick="submitTask('${t.id}')">Kirim Jawaban Tugas</button>`}
           </div>`;
         }).join('') || '<div class="empty-state">Belum ada tugas aktif.</div>'}
       </div>
@@ -1819,21 +1908,33 @@ function studentTasksView() {
 }
 
 function submitTask(id) {
+  if (role !== "murid" || !currentStudent()) {
+    toast("Akses ditolak. Hanya murid yang masuk yang dapat mengirim jawaban.", "error"); return;
+  }
   const s = currentStudent();
   const t = db.tasks.find(x => x.id === id);
-  const m = modal("Kirim Jawaban Tugas", `
-    <p><b>${t.title}</b></p>
-    <textarea id="ans" style="width:100%;min-height:100px;padding:10px;border-radius:8px;border:1px solid #cbd5e1" placeholder="Tuliskan jawaban atau hasil pengerjaan Anda di sini..."></textarea>
-  `, `<button class="btn btn-primary" id="btnS">Kirim Jawaban</button>`);
-
+  if (!t) { toast("Tugas tidak ditemukan atau tidak diberikan guru.", "error"); return; }
+  t.submissions = Array.isArray(t.submissions) ? t.submissions : [];
+  if (t.submissions.some(sb => sb.studentId === s.id)) {
+    toast("Jawaban tugas ini sudah dikirim. Pengiriman ulang atau pengeditan tidak diizinkan.", "error");
+    render(); return;
+  }
+  const m = modal("Kirim Jawaban Tugas — Pengiriman Satu Kali", `
+    <p><b>${esc(t.title)}</b></p>
+    <p class="muted small">${esc(t.description || "Ikuti instruksi tugas dari guru.")}</p>
+    <p class="small" style="color:var(--rose);font-weight:700">Periksa jawaban sebelum dikirim. Setelah dikirim, jawaban tidak dapat diubah.</p>
+    <textarea id="ans" style="width:100%;min-height:100px;padding:10px;border-radius:8px;border:1px solid #cbd5e1" placeholder="Tuliskan jawaban sesuai instruksi guru..."></textarea>
+  `, `<button class="btn btn-primary" id="btnS">Kirim Sekali dan Kunci Jawaban</button>`);
   m.querySelector("#btnS").onclick = () => {
+    if (role !== "murid" || currentStudentId !== s.id || t.submissions.some(sb => sb.studentId === s.id)) {
+      toast("Jawaban sudah dikirim atau sesi tidak valid. Perubahan ditolak.", "error");
+      m.remove(); render(); return;
+    }
     const ans = m.querySelector("#ans").value.trim();
     if (!ans) { toast("Jawaban tidak boleh kosong!", "error"); return; }
-    t.submissions = t.submissions || [];
-    const idx = t.submissions.findIndex(sb => sb.studentId === s.id);
-    const payload = { studentId: s.id, answer: ans, date: new Date().toISOString().slice(0, 16).replace('T', ' ') };
-    if (idx >= 0) t.submissions[idx] = payload; else t.submissions.push(payload);
-    saveDB(); m.remove(); render(); toast("Jawaban tugas berhasil dikirim!", "success");
+    t.submissions.push({studentId:s.id, answer:ans, date:new Date().toISOString().slice(0,16).replace('T',' ')});
+    saveDB(); m.remove(); render();
+    toast("Jawaban berhasil dikirim dan dikunci. Tidak dapat diedit.", "success");
   };
 }
 
@@ -1847,8 +1948,7 @@ function studentAssessmentsView() {
         <table class="table">
           <thead><tr><th>Mata Pelajaran</th><th>Jenis Asesmen</th><th>Nilai</th><th>Catatan Guru</th></tr></thead>
           <tbody>
-            ${ass.map(a => `<tr><td>${esc(a.subject)}</td><td>${esc(a.type)}</td><td><b>${a.score}</b></td><td>${esc(a.note)}</td>
-              <td><button class="btn btn-secondary small" onclick="editNarasiRecord('assessment','${a.id}')">Edit</button></td></tr>`).join('') || '<tr><td colspan="4"><div class="empty-state">Belum ada rekapitulasi nilai.</div></td></tr>'}
+            ${ass.map(a => `<tr><td>${esc(a.subject)}</td><td>${esc(a.type)}</td><td><b>${a.score}</b></td><td>${esc(a.note)}</td></tr>`).join('') || '<tr><td colspan="4"><div class="empty-state">Belum ada rekapitulasi nilai.</div></td></tr>'}
           </tbody>
         </table>
       </div>
@@ -1866,7 +1966,7 @@ function studentProgressView() {
         <table class="table">
           <thead><tr><th>Mata Pelajaran</th><th>Nilai Awal</th><th>Nilai Re-Asesmen</th><th>Peningkatan</th><th>Catatan</th></tr></thead>
           <tbody>
-            ${db.reassessments.filter(r => r.studentId === s.id).map(r => `<tr><td>${esc(r.subject)}</td><td>${r.initialScore}</td><td><b>${r.score}</b></td><td><b style="color:var(--emerald)">+${r.score - r.initialScore} Pt</b></td><td>${esc(r.note)}</td><td><button class="btn btn-secondary small" onclick="editNarasiRecord('reassess','${r.id}')">Edit</button></td></tr>`).join('') || '<tr><td colspan="5"><div class="empty-state">Belum ada catatan re-asesmen.</div></td></tr>'}
+            ${db.reassessments.filter(r => r.studentId === s.id).map(r => `<tr><td>${esc(r.subject)}</td><td>${r.initialScore}</td><td><b>${r.score}</b></td><td><b style="color:var(--emerald)">+${r.score - r.initialScore} Pt</b></td><td>${esc(r.note)}</td></tr>`).join('') || '<tr><td colspan="5"><div class="empty-state">Belum ada catatan re-asesmen.</div></td></tr>'}
           </tbody>
         </table>
       </div>
